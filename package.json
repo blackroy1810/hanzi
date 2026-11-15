@@ -1,0 +1,15 @@
+{
+  "name": "hanzi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "汉字笔顺练习纸生成器（单文件网页，家用）",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node tests/smoke.test.js"
+  },
+  "devDependencies": {
+    "hanzi-writer-data": "2.0.1",
+    "jsdom": "31.0.1",
+    "pinyin-pro": "3.29.5"
+  }
+}
