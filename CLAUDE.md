@@ -28,3 +28,21 @@ jsdom 里没有 canvas，PDF 导出和打印排版测不到。涉及导出、排
 - 多音字默认读音取 pinyin-pro 的第一项，个别字可能与教材不同，用户可在页面里改。
 - 笔顺数据来自开源项目，个别字与教材有出入。
 - 页面依赖 `DecompressionStream`（Safari 16.4+、Chrome）。
+
+## 规则
+- **架构与隐私红线**：
+  - 页面必须自包含：不引用外部脚本、字体、图片，不发网络请求；必须能离线及从 `file://` 打开。
+  - 严禁修改或删除 `src/app.html` 中的 `__DB__` 占位符。
+  - 不提交 `dist/`、`node_modules/`、临时调试文件；不手改 `dist/`，只改 `src/` 后重新 build。
+  - **公开仓库红线**：严禁在仓库内创建 `.env` 或写入/打印任何 API 密钥、个人及孩子信息。
+  - **CI 门禁保护**：`main` 受分支保护规则约束，严禁修改 `.github/workflows/ci.yml` 中的测试 Job 名称（会导致 PR 检查死锁）。
+- **改动规范**：
+  - 改动前先说明准备改哪些文件、为什么、涉及哪些状态/数据流变化，等用户同意后再改。
+  - 一个分支、一个 PR 只解决一个问题；分支名用 `fix/…`、`feat/…`、`chore/…`；提交说明用中文，一句话说清改了什么。
+
+## 标准工作流（必须严格按顺序执行）
+1. **同步基准**：开工前先检查 `git status`，确保工作区干净；执行 `git switch main && git pull` 更新到最新基准后再切新分支（`git switch -c <type>/<name>`）。严禁直接在 `main` 上提交或强推（`--force`）。
+2. **修改与本地门禁**：修改源码后必须执行 `npm run build && npm test` 确认通过。
+3. **人工审查点**：停止操作，等待用户在 Cursor 中审阅 `git diff`（及按需在浏览器/iPhone Safari 实测导出与排版）。
+4. **精准提交与提 PR**：获得用户确认后，按具体文件路径执行 `git add <file1> <file2>`（**禁止使用 `git add -A` 或 `git add .`**），先检查 `git diff --cached` 无误后再 `git commit` → `git push -u origin <branch>` → `gh pr create`。
+5. **等待与收尾**：可执行 `gh pr checks --watch` 观察云端 CI 结果，但**严禁 AI 擅自执行 `gh pr merge`**。用户在 GitHub 网页完成 Squash merge 后，本地执行 `git switch main && git pull && git branch -D <branch>` 清理旧分支。
