@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>汉字笔顺练习纸生成器</title>
+<style>
+:root{--bg:#e9e9ec;--panel:#fff;--ink:#222;--line:#d0d0d6;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#232327;--panel:#34343a;--ink:#eee;--line:#55555d}}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.ui{background:var(--panel);padding:12px 14px;border-bottom:1px solid var(--line)}
+.ui h1{font-size:17px;margin:0 0 8px}
+textarea{width:100%;box-sizing:border-box;font-size:20px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-family:inherit;resize:vertical}
+.opts{display:flex;flex-wrap:wrap;gap:10px 16px;margin:8px 0;font-size:14px;align-items:center}
+select,input[type=text]{font-size:15px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+button.alt{background:#555}button:disabled{opacity:.5}button{font-size:15px;padding:8px 18px;border:0;border-radius:8px;background:#c0392b;color:#fff}
+#poly{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:15px;margin-top:6px}
+#poly span.i{display:inline-flex;gap:4px;align-items:center;background:var(--bg);padding:3px 8px;border-radius:8px}
+#poly b{font-size:20px;font-weight:600}
+#msg{font-size:13px;color:#c0392b;margin-top:6px;min-height:1em}
+.tip{font-size:12px;opacity:.7;margin-top:4px}
+.wrap{padding:12px 0;overflow:hidden}
+.sheet{background:#fff;color:#222;width:210mm;height:297mm;margin:0 auto 12px;padding:10mm;box-sizing:border-box;page-break-after:always;overflow:hidden;font-family:"Kaiti SC","KaiTi","PingFang SC",sans-serif}
+.top{height:8mm;font-size:11pt;display:flex;justify-content:space-between;color:#555}
+.head{height:9mm;display:flex;align-items:baseline;gap:4mm}
+.py{font-family:Arial,"PingFang SC",sans-serif;font-size:17pt;color:#c0392b}
+.meta{font-size:9pt;color:#888}
+.row{display:flex}
+.row.steps{margin-bottom:3mm}
+.cell{box-sizing:border-box;border:.35mm solid #c0392b;flex:none;margin-right:-.35mm}
+svg{display:block}
+@page{size:A4;margin:0}
+@media print{body{background:#fff}.ui{display:none}.wrap{padding:0;overflow:visible}#root{zoom:1!important}.sheet{margin:0}}
+</style></head><body>
+<div class="ui">
+<h1>汉字笔顺练习纸</h1>
+<textarea id="inp" rows="2" placeholder="输入生字，例如：树桥数欢园"></textarea>
+<div class="opts">
+<label>每页字数 <select id="per"><option>4</option><option selected>5</option><option>6</option></select></label>
+<label>描红格 <select id="ghost"><option>0</option><option>2</option><option selected>3</option><option>4</option></select></label>
+<button id="bpdf" onclick="exportPdf()">导出 PDF</button><button id="bmd" class="alt" onclick="exportMd()">导出 Markdown</button>
+</div>
+<div id="poly"></div>
+<div id="msg">字库加载中…如果一直没变化，说明当前打开方式不能运行网页，请改用 Safari 或 Chrome 打开页面链接（不要用文件预览或微信内置浏览器）。</div>
+<div class="tip">收录常用字约 3700 个。导出 PDF 后用系统打印，纸张选 A4，缩放选“实际大小”（不要“缩放以适合”）。笔顺数据来自开源项目，个别字可能与教材略有出入。</div>
+</div>
+<div class="wrap"><div id="root"></div></div>
+<script>
+const B64="__DB__";
+const $=id=>document.getElementById(id);
+let DB=null;const sel={},cust={};
+const L='stroke="#e8b4ae" stroke-width="6" stroke-dasharray="26 22"';
+const grid='<line x1="0" y1="0" x2="1024" y2="1024" '+L+'/><line x1="1024" y1="0" x2="0" y2="1024" '+L+'/><line x1="512" y1="0" x2="512" y2="1024" '+L+'/><line x1="0" y1="512" x2="1024" y2="512" '+L+'/>';
+function cell(s,upto,mode,mm){
+  let g='';
+  s.forEach((p,i)=>{let f=null;
+    if(mode==='full')f='#222';
+    else if(mode==='ghost')f='#d6d6d6';
+    else if(mode==='step'){f=i<upto-1?'#999':(i===upto-1?'#d62d20':null);}
+    if(f)g+='<path d="'+p+'" fill="'+f+'"/>';});
+  return '<div class="cell" style="width:'+mm+'mm;height:'+mm+'mm"><svg viewBox="0 0 1024 1024" width="100%" height="100%">'+grid+'<g transform="translate(0,900) scale(1,-1)">'+g+'</g></svg></div>';
+}
+function chars(){const t=$('inp').value.match(/[\u4e00-\u9fff]/g)||[];return [...new Set(t)];}
+function pyOf(c){const d=DB[c];if(sel[c]==='__c'&&cust[c])return cust[c];return sel[c]&&sel[c]!=='__c'?sel[c]:d.p[0];}
+function buildPoly(){
+  const box=$('poly');box.innerHTML='';
+  chars().filter(c=>DB&&DB[c]&&DB[c].p.length>1).forEach(c=>{
+    const sp=document.createElement('span');sp.className='i';
+    const b=document.createElement('b');b.textContent=c;
+    const se=document.createElement('select');
+    DB[c].p.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;se.appendChild(o);});
+    const oc=document.createElement('option');oc.value='__c';oc.textContent='自定义…';se.appendChild(oc);
+    se.value=sel[c]||DB[c].p[0];
+    const ti=document.createElement('input');ti.type='text';ti.size=6;ti.placeholder='拼音';ti.value=cust[c]||'';
+    ti.style.display=se.value==='__c'?'':'none';
+    se.onchange=()=>{sel[c]=se.value;ti.style.display=se.value==='__c'?'':'none';render();};
+    ti.oninput=()=>{cust[c]=ti.value;render();};
+    sp.append(b,se,ti);box.appendChild(sp);});
+}
+function render(){
+  if(!DB)return;
+  const all=chars(),ok=all.filter(c=>DB[c]),bad=all.filter(c=>!DB[c]);
+  const raw=$('inp').value.replace(/[\u4e00-\u9fff\s]/g,'');
+  $('msg').textContent=bad.length?('暂无数据：'+bad.join(' ')):'';
+  const per=+$('per').value,gh=+$('ghost').value;
+  const bh=(269/per).toFixed(2);
+  let out='';
+  for(let i=0;i<ok.length;i+=per){
+    out+='<div class="sheet"><div class="top"><span>汉字笔顺练习</span><span>姓名：________　日期：________</span></div>';
+    ok.slice(i,i+per).forEach(c=>{
+      const s=DB[c].s,n=s.length;
+      const w=Math.min(13,Math.floor(1820/(n+1))/10);
+      let st=cell(s,0,'full',w);
+      for(let k=1;k<=n;k++)st+=cell(s,k,'step',w);
+      let bl='';for(let k=0;k<11;k++)bl+=cell(s,0,k<gh?'ghost':'none',17);
+      out+='<div style="height:'+bh+'mm"><div class="head"><span class="py">'+pyOf(c)+'</span><span class="meta">'+c+' · '+n+' 画</span></div><div class="row steps">'+st+'</div><div class="row">'+bl+'</div></div>';
+    });
+    out+='</div>';
+  }
+  $('root').innerHTML=out||'<p style="text-align:center;opacity:.6">输入生字后这里会出现预览</p>';
+  fit();
+  try{localStorage.setItem('hz_in',$('inp').value);}catch(e){}
+}
+function fit(){const w=Math.min(1,(innerWidth-8)/794);$('root').style.zoom=w;}
+
+let DL=null;
+try{if(window.claude&&claude.use)claude.use('downloads').then(d=>{DL=d;}).catch(()=>{});}catch(e){}
+const today=()=>new Date().toISOString().slice(0,10);
+async function saveFile(name,blob){
+  if(DL){try{await DL.save({filename:name,data:blob});return true;}
+  catch(e){if(e&&e.code==='declined')return false;
+    if(e&&e.code!=='unavailable'&&e.code!=='not_granted'){$('msg').textContent='保存失败：'+(e.message||e.code);return false;}}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);return true;
+}
+function cur(){return {ok:chars().filter(c=>DB&&DB[c]),per:+$('per').value,gh:+$('ghost').value};}
+const MM=250/25.4;
+const pt=p=>p*0.3528*MM;
+function dCell(ctx,x,y,mm,s,upto,mode){
+  const lw=.35*MM,W=mm*MM;
+  ctx.save();
+  ctx.translate(x*MM+lw,y*MM+lw);ctx.scale((W-2*lw)/1024,(W-2*lw)/1024);
+  ctx.strokeStyle='#e8b4ae';ctx.lineWidth=6;ctx.setLineDash([26,22]);
+  [[0,0,1024,1024],[1024,0,0,1024],[512,0,512,1024],[0,512,1024,512]].forEach(l=>{ctx.beginPath();ctx.moveTo(l[0],l[1]);ctx.lineTo(l[2],l[3]);ctx.stroke();});
+  ctx.setLineDash([]);ctx.translate(0,900);ctx.scale(1,-1);
+  s.forEach((d,i)=>{let f=null;
+    if(mode==='full')f='#222';else if(mode==='ghost')f='#d6d6d6';
+    else if(mode==='step')f=i<upto-1?'#999':(i===upto-1?'#d62d20':null);
+    if(f){ctx.fillStyle=f;ctx.fill(new Path2D(d));}});
+  ctx.restore();
+  ctx.strokeStyle='#c0392b';ctx.lineWidth=lw;ctx.setLineDash([]);
+  ctx.strokeRect(x*MM+lw/2,y*MM+lw/2,W-lw,W-lw);
+}
+function dSheet(items,per,gh){
+  const cv=document.createElement('canvas');cv.width=Math.round(210*MM);cv.height=Math.round(297*MM);
+  const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
+  const KT='"Kaiti SC","KaiTi","PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillStyle='#555';ctx.font=pt(11)+'px '+KT;ctx.textBaseline='alphabetic';
+  ctx.textAlign='left';ctx.fillText('汉字笔顺练习',10*MM,15.5*MM);
+  ctx.textAlign='right';ctx.fillText('姓名：________　日期：________',200*MM,15.5*MM);
+  ctx.textAlign='left';
+  const bh=269/per;
+  items.forEach((c,i)=>{
+    const s=DB[c].s,n=s.length,y0=18+i*bh,w=Math.min(13,Math.floor(1820/(n+1))/10);
+    const py=pyOf(c);
+    ctx.fillStyle='#c0392b';ctx.font=pt(17)+'px Arial,"PingFang SC",sans-serif';ctx.fillText(py,10*MM,(y0+6.5)*MM);
+    const pw=ctx.measureText(py).width;
+    ctx.fillStyle='#888';ctx.font=pt(9)+'px '+KT;ctx.fillText(c+' · '+n+' 画',10*MM+pw+4*MM,(y0+6.5)*MM);
+    dCell(ctx,10,y0+9,w,s,0,'full');
+    for(let k=1;k<=n;k++)dCell(ctx,10+k*(w-.35),y0+9,w,s,k,'step');
+    for(let k=0;k<11;k++)dCell(ctx,10+k*16.65,y0+9+w+3,17,s,0,k<gh?'ghost':'none');
+  });
+  return cv;
+}
+function makePdf(imgs){
+  const enc=new TextEncoder(),parts=[],offs=[];let len=0;
+  const push=b=>{const u=typeof b==='string'?enc.encode(b):b;parts.push(u);len+=u.length;};
+  const obj=(n,body)=>{offs[n]=len;push(n+' 0 obj\n'+body+'\nendobj\n');};
+  push('%PDF-1.4\n');
+  obj(1,'<</Type/Catalog/Pages 2 0 R>>');
+  obj(2,'<</Type/Pages/Kids['+imgs.map((_,i)=>(3+3*i)+' 0 R').join(' ')+']/Count '+imgs.length+'>>');
+  imgs.forEach((im,i)=>{const p=3+3*i;
+    obj(p,'<</Type/Page/Parent 2 0 R/MediaBox[0 0 595.28 841.89]/Resources<</XObject<</Im0 '+(p+1)+' 0 R>>>>/Contents '+(p+2)+' 0 R>>');
+    offs[p+1]=len;push((p+1)+' 0 obj\n<</Type/XObject/Subtype/Image/Width '+im.w+'/Height '+im.h+'/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length '+im.data.length+'>>\nstream\n');
+    push(im.data);push('\nendstream\nendobj\n');
+    const c='q 595.28 0 0 841.89 0 0 cm /Im0 Do Q';
+    obj(p+2,'<</Length '+c.length+'>>\nstream\n'+c+'\nendstream');});
+  const xr=len,total=3+3*imgs.length;
+  push('xref\n0 '+total+'\n0000000000 65535 f \n');
+  for(let n=1;n<total;n++)push(String(offs[n]).padStart(10,'0')+' 00000 n \n');
+  push('trailer\n<</Size '+total+'/Root 1 0 R>>\nstartxref\n'+xr+'\n%%EOF');
+  return new Blob(parts,{type:'application/pdf'});
+}
+function busy(b){$('bpdf').disabled=b;$('bmd').disabled=b;}
+async function exportPdf(){
+  const {ok,per,gh}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
+  busy(true);$('msg').textContent='正在生成 PDF…';
+  try{
+    const imgs=[];
+    for(let i=0;i<ok.length;i+=per){
+      const cv=dSheet(ok.slice(i,i+per),per,gh);
+      const b=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.92));
+      imgs.push({data:new Uint8Array(await b.arrayBuffer()),w:cv.width,h:cv.height});
+      await new Promise(r=>setTimeout(r,0));
+    }
+    $('msg').textContent='';
+    await saveFile('汉字练习_'+today()+'.pdf',makePdf(imgs));
+  }catch(e){$('msg').textContent='生成失败：'+(e.message||e);}
+  busy(false);
+}
+async function exportMd(){
+  const {ok}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
+  let m='# 生字练习表\n\n生字：'+ok.map(c=>c+'（'+pyOf(c)+'）').join('、')+'\n\n| 序号 | 汉字 | 拼音 | 笔画数 |\n| --- | --- | --- | --- |\n';
+  ok.forEach((c,i)=>{m+='| '+(i+1)+' | '+c+' | '+pyOf(c)+' | '+DB[c].s.length+' |\n';});
+  m+='\n生成日期：'+today()+'\n';
+  await saveFile('汉字练习_'+today()+'.md',new Blob([m],{type:'text/markdown'}));
+}
+addEventListener('resize',fit);
+$('inp').oninput=()=>{buildPoly();render();};
+$('per').onchange=render;$('ghost').onchange=render;
+setTimeout(()=>{if(!DB&&!$('msg').textContent.includes('失败'))$('msg').textContent='字库 20 秒还没加载出来：请刷新重试，或换 Safari / Chrome 打开链接。';},20000);
+(async()=>{
+  try{
+    const bin=Uint8Array.from(atob(B64),c=>c.charCodeAt(0));
+    DB=await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).json();
+  }catch(e){$('msg').textContent='字库加载失败，请换用较新的浏览器（Safari 16.4+ / Chrome）。';return;}
+  let v='树桥数欢园种活极洗点';
+  try{v=localStorage.getItem('hz_in')||v;}catch(e){}
+  $('inp').value=v;$('msg').textContent='';
+  buildPoly();render();
+})();
+</script></body></html>
