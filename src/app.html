@@ -25,7 +25,7 @@ button.alt{background:#555}button:disabled{opacity:.5}button{font-size:15px;padd
 .meta{font-size:9pt;color:#888}
 .row{display:flex}
 .row.steps{margin-bottom:3mm}
-.cell{box-sizing:border-box;border:.35mm solid #c0392b;flex:none;margin-right:-.35mm}
+.cell{box-sizing:border-box;border:.35mm solid #444;flex:none;margin-right:-.35mm}
 svg{display:block}
 @page{size:A4;margin:0}
 @media print{body{background:#fff}.ui{display:none}.wrap{padding:0;overflow:visible}#root{zoom:1!important}.sheet{margin:0}}
@@ -34,7 +34,7 @@ svg{display:block}
 <h1>汉字笔顺练习纸</h1>
 <textarea id="inp" rows="2" placeholder="输入生字，例如：树桥数欢园"></textarea>
 <div class="opts">
-<label>每页字数 <select id="per"><option>4</option><option selected>5</option><option>6</option></select></label>
+<label>每页字数 <select id="per"><option>4</option><option>5</option><option selected>6</option></select></label>
 <label>描红格 <select id="ghost"><option>0</option><option>2</option><option selected>3</option><option>4</option></select></label>
 <button id="bpdf" onclick="exportPdf()">导出 PDF</button><button id="bmd" class="alt" onclick="exportMd()">导出 Markdown</button>
 </div>
@@ -47,14 +47,14 @@ svg{display:block}
 const B64="__DB__";
 const $=id=>document.getElementById(id);
 let DB=null;const sel={},cust={};
-const L='stroke="#e8b4ae" stroke-width="6" stroke-dasharray="26 22"';
-const grid='<line x1="0" y1="0" x2="1024" y2="1024" '+L+'/><line x1="1024" y1="0" x2="0" y2="1024" '+L+'/><line x1="512" y1="0" x2="512" y2="1024" '+L+'/><line x1="0" y1="512" x2="1024" y2="512" '+L+'/>';
+const L='stroke="#dc9a92" stroke-width="18" stroke-dasharray="26 22"';
+const grid='<line x1="512" y1="0" x2="512" y2="1024" '+L+'/><line x1="0" y1="512" x2="1024" y2="512" '+L+'/>';
 function cell(s,upto,mode,mm){
   let g='';
   s.forEach((p,i)=>{let f=null;
     if(mode==='full')f='#222';
     else if(mode==='ghost')f='#d6d6d6';
-    else if(mode==='step'){f=i<upto-1?'#999':(i===upto-1?'#d62d20':null);}
+    else if(mode==='step'){f=i<upto-1?'#c8c8c8':(i===upto-1?'#000':null);}
     if(f)g+='<path d="'+p+'" fill="'+f+'"/>';});
   return '<div class="cell" style="width:'+mm+'mm;height:'+mm+'mm"><svg viewBox="0 0 1024 1024" width="100%" height="100%">'+grid+'<g transform="translate(0,900) scale(1,-1)">'+g+'</g></svg></div>';
 }
@@ -118,15 +118,15 @@ function dCell(ctx,x,y,mm,s,upto,mode){
   const lw=.35*MM,W=mm*MM;
   ctx.save();
   ctx.translate(x*MM+lw,y*MM+lw);ctx.scale((W-2*lw)/1024,(W-2*lw)/1024);
-  ctx.strokeStyle='#e8b4ae';ctx.lineWidth=6;ctx.setLineDash([26,22]);
-  [[0,0,1024,1024],[1024,0,0,1024],[512,0,512,1024],[0,512,1024,512]].forEach(l=>{ctx.beginPath();ctx.moveTo(l[0],l[1]);ctx.lineTo(l[2],l[3]);ctx.stroke();});
+  ctx.strokeStyle='#dc9a92';ctx.lineWidth=18;ctx.setLineDash([26,22]);
+  [[512,0,512,1024],[0,512,1024,512]].forEach(l=>{ctx.beginPath();ctx.moveTo(l[0],l[1]);ctx.lineTo(l[2],l[3]);ctx.stroke();});
   ctx.setLineDash([]);ctx.translate(0,900);ctx.scale(1,-1);
   s.forEach((d,i)=>{let f=null;
     if(mode==='full')f='#222';else if(mode==='ghost')f='#d6d6d6';
-    else if(mode==='step')f=i<upto-1?'#999':(i===upto-1?'#d62d20':null);
+    else if(mode==='step')f=i<upto-1?'#c8c8c8':(i===upto-1?'#000':null);
     if(f){ctx.fillStyle=f;ctx.fill(new Path2D(d));}});
   ctx.restore();
-  ctx.strokeStyle='#c0392b';ctx.lineWidth=lw;ctx.setLineDash([]);
+  ctx.strokeStyle='#444';ctx.lineWidth=lw;ctx.setLineDash([]);
   ctx.strokeRect(x*MM+lw/2,y*MM+lw/2,W-lw,W-lw);
 }
 function dSheet(items,per,gh){
