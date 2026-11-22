@@ -1,11 +1,14 @@
-// 构建：从开源数据生成字库，嵌入 src/app.html，输出 dist/index.html
+// 构建：从开源数据生成字库，合入多音字与普通字例词，嵌入 src/app.html，输出 dist/index.html
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { pinyin } = require('pinyin-pro');
+const { checkPolyphones, checkWords } = require('./check-polyphones');
 
 const root = path.join(__dirname, '..');
 const dataDir = path.join(root, 'node_modules', 'hanzi-writer-data');
+const polyFile = path.join(root, 'data', 'polyphones.json');
+const wordsFile = path.join(root, 'data', 'words.json');
 
 // 字表：GB2312 一级字（约 3755 个常用字），按区位码解码得到
 function commonChars() {
@@ -20,7 +23,12 @@ function commonChars() {
   return out;
 }
 
-function buildDb() {
+function loadJson(file) {
+  if (!fs.existsSync(file)) return {};
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function buildDb(polyphones, wordsMap) {
   const db = {};
   let missing = 0;
   for (const c of commonChars()) {
@@ -29,15 +37,33 @@ function buildDb() {
     const strokes = JSON.parse(fs.readFileSync(f, 'utf8')).strokes;
     const def = pinyin(c, { toneType: 'symbol' });
     const all = pinyin(c, { multiple: true, toneType: 'symbol', type: 'array' }).flat();
-    const py = [def, ...new Set(all.filter((x) => x !== def))];
-    db[c] = { p: py, s: strokes };
+    const extra = polyphones[c] ? Object.keys(polyphones[c]) : [];
+    const py = [def, ...new Set([...all, ...extra].filter((x) => x !== def))];
+    const entry = { p: py, s: strokes };
+    if (polyphones[c]) {
+      entry.w = polyphones[c];
+    } else if (wordsMap[c]) {
+      entry.w = { [def]: wordsMap[c] };
+    }
+    db[c] = entry;
   }
   return { db, missing };
 }
 
-const { db, missing } = buildDb();
+const polyphones = loadJson(polyFile);
+const wordsMap = loadJson(wordsFile);
+const { db, missing } = buildDb(polyphones, wordsMap);
 const count = Object.keys(db).length;
 if (count < 3500) throw new Error('字库字数异常：' + count);
+
+const charSet = new Set(Object.keys(db));
+const check = checkPolyphones(polyphones, charSet);
+console.log(`多音字例词表 ${check.charCount} 字（${check.checkedWords} 词），校验警告 ${check.warnings.length} 条`);
+check.warnings.forEach((w) => console.warn('  ' + w));
+
+const wCheck = checkWords(wordsMap, charSet, polyphones);
+console.log(`普通字例词表 ${wCheck.charCount} 字（${wCheck.checkedWords} 词），校验警告 ${wCheck.warnings.length} 条`);
+wCheck.warnings.forEach((w) => console.warn('  ' + w));
 
 const b64 = zlib.gzipSync(JSON.stringify(db), { level: 9 }).toString('base64');
 const tpl = fs.readFileSync(path.join(root, 'src', 'app.html'), 'utf8');
