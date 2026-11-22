@@ -2,6 +2,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。版本号为内部迭代编号，按时间倒叙排列（最新版本在最上方）。
 
+## [v1.4.1] - 2026-11-22
+### 新增
+- 新增 `AGENTS.md` 作为多 LLM 统一开发规范真相源，并补充轻量工具入口 `GEMINI.md` 与 `.github/copilot-instructions.md`。
+- 新增协作模板 `.github/ISSUE_TEMPLATE/task.md`（多模型任务单）与 `.github/pull_request_template.md`（PR 门禁与实测清单）。
+### 变更
+- 精简 `CLAUDE.md` 为指向 `AGENTS.md`（含 `@AGENTS.md` 引用），清理重复规则与单一 IDE 绑定表述。
+- 更新 `.gitignore` 忽略 `.worktrees/`、`.env*` 及常见 AI 工具本地私有目录（`.claude/`、`.gemini/`、`.codex/`、`.aider*`）。
+- 更新 `README.md` 链接 `AGENTS.md`，补充 `git worktree` 并发隔离及局域网 iPhone Safari 预览命令。
+
 ## [v1.4] - 2026-11-22
 ### 新增
 - 引入构建期离线词典依赖 `@pinyin-pro/data` 与提取脚本 `scripts/word-dict.js`，全字库 3755 字推荐组词覆盖率由 12% 提升至 99.5%+，页面产物仍保持完全离线自包含。
