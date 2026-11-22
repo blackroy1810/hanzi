@@ -11,7 +11,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"P
 textarea{width:100%;box-sizing:border-box;font-size:20px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-family:inherit;resize:vertical}
 .opts{display:flex;flex-wrap:wrap;gap:10px 16px;margin:8px 0;font-size:14px;align-items:center}
 select,input[type=text]{font-size:15px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
-button.alt{background:#555}button:disabled{opacity:.5}button{font-size:15px;padding:8px 18px;border:0;border-radius:8px;background:#c0392b;color:#fff}
+button.alt{background:#555}button:disabled{opacity:.5}button{font-size:15px;padding:8px 18px;border:0;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer}
 #poly{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:15px;margin-top:6px}
 #poly span.i{display:inline-flex;gap:4px;align-items:center;background:var(--bg);padding:3px 8px;border-radius:8px}
 #poly b{font-size:20px;font-weight:600}
@@ -28,7 +28,7 @@ button.alt{background:#555}button:disabled{opacity:.5}button{font-size:15px;padd
 .cell{box-sizing:border-box;border:.35mm solid #444;flex:none;margin-right:-.35mm}
 svg{display:block}
 @page{size:A4;margin:0}
-@media print{body{background:#fff}.ui{display:none}.wrap{padding:0;overflow:visible}#root{zoom:1!important}.sheet{margin:0}}
+@media print{body{background:#fff}.ui{display:none}.wrap{padding:0;overflow:visible}#root{zoom:1!important}.sheet{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet:last-child{page-break-after:auto;break-after:auto}}
 </style></head><body>
 <div class="ui">
 <h1>汉字笔顺练习纸</h1>
@@ -36,11 +36,11 @@ svg{display:block}
 <div class="opts">
 <label>每页字数 <select id="per"><option>4</option><option>5</option><option selected>6</option></select></label>
 <label>描红格 <select id="ghost"><option>0</option><option>2</option><option selected>3</option><option>4</option></select></label>
-<button id="bpdf" onclick="exportPdf()">导出 PDF</button><button id="bmd" class="alt" onclick="exportMd()">导出 Markdown</button>
+<button id="bprint" onclick="doPrint()">一键打印</button><button id="bpdf" class="alt" onclick="exportPdf()">导出 PDF</button><button id="bmd" class="alt" onclick="exportMd()">导出 Markdown</button>
 </div>
 <div id="poly"></div>
 <div id="msg">字库加载中…如果一直没变化，说明当前打开方式不能运行网页，请改用 Safari 或 Chrome 打开页面链接（不要用文件预览或微信内置浏览器）。</div>
-<div class="tip">收录常用字约 3700 个。导出 PDF 后用系统打印，纸张选 A4，缩放选“实际大小”（不要“缩放以适合”）。笔顺数据来自开源项目，个别字可能与教材略有出入。</div>
+<div class="tip">收录常用字约 3700 个。点击“一键打印”或导出 PDF 后用系统打印，纸张选 A4，缩放选“实际大小”（不要“缩放以适合”）。笔顺数据来自开源项目，个别字可能与教材略有出入。</div>
 </div>
 <div class="wrap"><div id="root"></div></div>
 <script>
@@ -169,7 +169,11 @@ function makePdf(imgs){
   push('trailer\n<</Size '+total+'/Root 1 0 R>>\nstartxref\n'+xr+'\n%%EOF');
   return new Blob(parts,{type:'application/pdf'});
 }
-function busy(b){$('bpdf').disabled=b;$('bmd').disabled=b;}
+function busy(b){$('bprint').disabled=b;$('bpdf').disabled=b;$('bmd').disabled=b;}
+function doPrint(){
+  const {ok}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
+  window.print();
+}
 async function exportPdf(){
   const {ok,per,gh}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
   busy(true);$('msg').textContent='正在生成 PDF…';
