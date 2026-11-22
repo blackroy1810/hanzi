@@ -33,9 +33,14 @@ setTimeout(() => {
     assert.ok(d.querySelectorAll('#poly .i').length >= 2, '应出现多音字下拉框（数、种等）');
     const heads = [...d.querySelectorAll('.py')].map((e) => e.textContent);
     assert.ok(heads.includes('shù') && heads.includes('zhǒng'), '默认读音不对：' + heads.join(' '));
+    const btns = [...d.querySelectorAll('.opts button')].map((b) => b.id);
+    assert.deepStrictEqual(btns, ['bprint', 'bpdf', 'bmd'], '按钮顺序应为：一键打印、导出 PDF、导出 Markdown');
+    assert.ok(!d.getElementById('bprint').classList.contains('alt'), '一键打印应使用主色（红色）');
+    assert.ok(d.getElementById('bpdf').classList.contains('alt') && d.getElementById('bmd').classList.contains('alt'), '导出 PDF 和导出 Markdown 应使用中色调');
+    assert.strictEqual(typeof w.doPrint, 'function', '应提供 doPrint 打印函数');
     const pdf = w.makePdf([{ data: new Uint8Array([255, 216, 255]), w: 10, h: 10 }]);
     assert.ok(Buffer.from(pdf.p[0]).toString().startsWith('%PDF-1.4'), 'PDF 头不对');
-    console.log('冒烟测试通过：2 页预览、多音字下拉、PDF 生成器正常');
+    console.log('冒烟测试通过：2 页预览、多音字下拉、一键打印按钮、PDF 生成器正常');
     process.exit(0);
   } catch (e) {
     console.error('冒烟测试失败：' + e.message);
