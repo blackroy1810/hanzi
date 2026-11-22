@@ -29,6 +29,7 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 .pw-row{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;font-size:13px}
 .pw-py{font-weight:600;color:var(--accent);min-width:44px;font-family:Arial,"PingFang SC",sans-serif}
 .wchip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:6px;background:var(--panel);border:1px solid var(--line);font-size:14px}
+.wempty{font-size:12px;color:var(--muted)}
 .wadd{width:84px;font-size:13px;padding:2px 6px}
 .sbox{margin-top:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
 .sbox summary{font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
@@ -75,7 +76,7 @@ const B64="__DB__";
 const $=id=>document.getElementById(id);
 let DB=null;
 let cfg={};
-let singlesOpen=false;
+let singlesOpen=null;
 const CFG_KEY='hz_poly_v1';
 const L='stroke="#dc9a92" stroke-width="18" stroke-dasharray="26 22"';
 const grid='<line x1="512" y1="0" x2="512" y2="1024" '+L+'/><line x1="0" y1="512" x2="1024" y2="512" '+L+'/>';
@@ -181,13 +182,19 @@ function buildWordRow(c,p,showChar){
   }
   const pyLab=document.createElement('span');pyLab.className='pw-py';pyLab.textContent=p;
   row.appendChild(pyLab);
-  wordsOf(c,p).forEach(w=>{
-    const ch=document.createElement('span');ch.className='wchip';
-    const wt=document.createElement('span');wt.textContent=w;
-    const wb=document.createElement('button');wb.type='button';wb.className='wx';wb.textContent='×';wb.title='删除组词';
-    wb.onclick=()=>delWord(c,p,w);
-    ch.append(wt,wb);row.appendChild(ch);
-  });
+  const curWords=wordsOf(c,p);
+  if(curWords.length){
+    curWords.forEach(w=>{
+      const ch=document.createElement('span');ch.className='wchip';
+      const wt=document.createElement('span');wt.textContent=w;
+      const wb=document.createElement('button');wb.type='button';wb.className='wx';wb.textContent='×';wb.title='删除组词';
+      wb.onclick=()=>delWord(c,p,w);
+      ch.append(wt,wb);row.appendChild(ch);
+    });
+  }else{
+    const em=document.createElement('span');em.className='wempty';em.textContent='暂无推荐组词，可手动添加';
+    row.appendChild(em);
+  }
   const wi=document.createElement('input');wi.type='text';wi.className='wadd';wi.placeholder='添加组词';wi.setAttribute('aria-label',c+' '+p+' 添加组词');
   const wab=document.createElement('button');wab.type='button';wab.className='mini';wab.textContent='+';
   const doAddW=()=>{const v=wi.value.trim();if(v)addWords(c,p,v);};
@@ -247,9 +254,15 @@ function buildPoly(){
 
   const singles=list.filter(c=>!isPoly(c));
   if(singles.length){
-    const det=document.createElement('details');det.className='sbox';det.open=singlesOpen;
-    det.ontoggle=()=>{singlesOpen=det.open;};
-    const sum=document.createElement('summary');sum.textContent='普通汉字组词设置（'+singles.length+' 字，点击展开增删）';
+    const missingCount=singles.filter(c=>wordsOf(c,DB[c].p[0]).length===0).length;
+    const det=document.createElement('details');det.className='sbox';
+    const initOpen=singlesOpen!==null?singlesOpen:missingCount>0;
+    det.open=initOpen;
+    det.addEventListener('toggle',()=>{if(det.open!==initOpen||singlesOpen!==null)singlesOpen=det.open;});
+    const sum=document.createElement('summary');
+    sum.textContent=missingCount>0
+      ?('普通汉字组词设置（'+singles.length+' 字，其中 '+missingCount+' 字暂无推荐组词）')
+      :('普通汉字组词设置（'+singles.length+' 字，点击展开增删）');
     const sl=document.createElement('div');sl.className='slist';
     singles.forEach(c=>sl.appendChild(buildWordRow(c,DB[c].p[0],true)));
     det.append(sum,sl);
