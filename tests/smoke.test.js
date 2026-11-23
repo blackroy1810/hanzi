@@ -6,6 +6,7 @@ const zlib = require('zlib');
 const assert = require('assert');
 const { checkPolyphones } = require('../scripts/check-polyphones');
 const { BLOCKED_RE } = require('../scripts/word-dict');
+const { decodeGb2312Range } = require('../scripts/build');
 
 const file = path.join(__dirname, '..', 'dist', 'index.html');
 if (!fs.existsSync(file)) { console.error('请先运行 npm run build'); process.exit(1); }
@@ -34,22 +35,50 @@ setTimeout(() => {
     assert.strictEqual(d.querySelectorAll('.sheet').length, 2, '默认 10 个字、每页 6 个，应有 2 页');
     assert.ok(d.querySelectorAll('#poly .pcard').length >= 2, '应出现多音字卡片（数、种等）');
 
-    // 1. 全字库组词覆盖率与词条安全检查（≥ 98%）
+    // 1. 扩容字库规模、相对路径压缩、组词覆盖率与少儿敏感词安全检查
     const db = w.eval('DB');
     const allChars = Object.keys(db);
+    assert.ok(allChars.length >= 6900, `扩容后字库字数不足 6900：${allChars.length}`);
+    const l1Set = new Set(decodeGb2312Range(0xb0, 0xd7));
     let withWords = 0;
+    let l1WithWords = 0;
+    const forbiddenSamples = new Set([
+      '艾滋病', '梅毒', '痔疮', '上吊', '棺材', '花圈', '耳光', '雪茄', '鹰犬', '垃圾邮件', '回扣', '病灶',
+    ]);
     for (const c of allChars) {
+      assert.ok(Array.isArray(db[c].s) && db[c].s.length > 0, `字「${c}」缺少笔画数据`);
+      for (const stroke of db[c].s) {
+        assert.ok(/^M-?\d+/.test(stroke), `字「${c}」笔画路径格式异常：${stroke.slice(0, 20)}`);
+      }
       const wm = db[c].w;
       if (wm) {
         const ws = Object.values(wm).flat();
-        if (ws.length > 0) withWords++;
+        if (ws.length > 0) {
+          withWords++;
+          if (l1Set.has(c)) l1WithWords++;
+        }
         for (const word of ws) {
           assert.ok(!BLOCKED_RE.test(word), `字「${c}」出现被过滤词条：「${word}」`);
+          assert.ok(!forbiddenSamples.has(word), `字「${c}」出现已清理词条：「${word}」`);
         }
       }
     }
-    const coverage = withWords / allChars.length;
-    assert.ok(coverage >= 0.98, `全字库组词覆盖率不足 98%：${withWords}/${allChars.length}`);
+    const l1Coverage = l1WithWords / l1Set.size;
+    const totalCoverage = withWords / allChars.length;
+    assert.ok(l1Coverage >= 0.98, `GB2312 一级字组词覆盖率不足 98%：${l1WithWords}/${l1Set.size}`);
+    assert.ok(totalCoverage >= 0.85, `全字库组词覆盖率不足 85%：${withWords}/${allChars.length}`);
+
+    // 1b. 扩容字集验证：小学低年级高频字、日常用字与现代人名用字均已收录并可渲染
+    const expandedChars = [...'蜻蜓蚯蚓蝌蚪螃鹦鹉鳄鲨莓橘桦榕筝毽粽喆垚啰梓萱睿皓宸沐潇'];
+    for (const c of expandedChars) {
+      assert.ok(db[c], `扩容字库应包含「${c}」`);
+    }
+    // 1c. 无词多音字默认仅勾选首音（避免冷僻读音全开）
+    const noWordPoly = allChars.find((c) => db[c].p.length > 1 && !db[c].w);
+    if (noWordPoly) {
+      const defOnList = db[noWordPoly].p.filter((py) => w.isDefOn(noWordPoly, py));
+      assert.deepStrictEqual(defOnList, [db[noWordPoly].p[0]], `无词多音字「${noWordPoly}」应默认仅勾选首音`);
+    }
 
     // 2. 检查「长」的数据里同时有 cháng 和 zhǎng
     const changData = db['长'];
@@ -117,9 +146,11 @@ setTimeout(() => {
     const md2 = w.buildMd();
     assert.ok(md2.includes('| 1 | 蝉 | chán |') && !md2.includes('| 1 | 蝉 | chán |  |'), '新批次普通字 Markdown 应包含推荐例词');
 
-    // 9. 极少数无推荐词的字：显示空提示并自动展开普通汉字设置区
-    inp.value = '捌';
+    // 9. 扩容字渲染 + 极少数无推荐词的字：显示空提示并自动展开普通汉字设置区
+    inp.value = '蜻蜓蚯蚓蝌蚪喆垚捌';
     inp.dispatchEvent(new w.Event('input'));
+    assert.strictEqual(d.getElementById('msg').textContent, '', '扩容字（蜻蜓蚯蚓蝌蚪喆垚）不应报暂无数据');
+    assert.ok(d.querySelector('[data-char="蜻"] .head .wd').textContent.includes('蜻蜓'), '「蜻」应自动显示组词');
     const sboxDet = d.querySelector('#singles details');
     assert.ok(sboxDet && sboxDet.open, '输入无推荐组词的普通字时应自动展开普通汉字设置区');
     assert.ok(d.querySelector('#singles .wempty').textContent.includes('暂无推荐组词'), '无推荐组词时应显示提示文案');
@@ -134,10 +165,13 @@ setTimeout(() => {
     const pdf = w.makePdf([{ data: new Uint8Array([255, 216, 255]), w: 10, h: 10 }]);
     assert.ok(Buffer.from(pdf.p[0]).toString().startsWith('%PDF-1.4'), 'PDF 头不对');
 
+    const realPoly = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'polyphones.json'), 'utf8'));
+    const realCheck = checkPolyphones(realPoly, new Set(allChars));
+    assert.strictEqual(realCheck.warnings.length, 0, '内置多音字表校验应无未核验告警：' + realCheck.warnings.join(' | '));
     const badCheck = checkPolyphones({ 种: { zhòng: ['种子'] } });
     assert.ok(badCheck.warnings.length >= 1, '校验脚本应能报出故意写错读音的例词');
 
-    console.log(`冒烟测试通过：全字库组词覆盖 ${withWords}/${allChars.length}（${(coverage * 100).toFixed(1)}%），新批次非多音字自动出词、冷僻音收敛、无词提示、一键打印、Markdown 与 PDF 均正常`);
+    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），扩容字渲染、敏感词过滤、冷僻音收敛、校验白名单、一键打印、Markdown 与 PDF 均正常`);
     process.exit(0);
   } catch (e) {
     console.error('冒烟测试失败：' + e.message);

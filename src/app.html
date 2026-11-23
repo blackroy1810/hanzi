@@ -68,7 +68,7 @@ svg{display:block}
 <div id="poly"></div>
 <div id="singles"></div>
 <div id="msg">字库加载中…如果一直没变化，说明当前打开方式不能运行网页，请改用 Safari 或 Chrome 打开页面链接（不要用文件预览或微信内置浏览器）。</div>
-<div class="tip">收录常用字约 3700 个。多音字可勾选读音、添加自定义拼音，所有汉字均支持自由增删组词（自动保存在本机）。点击“一键打印”或导出 PDF 后请选 A4 纸、缩放选“实际大小”。</div>
+<div class="tip">收录常用字约 7000 个。多音字可勾选读音、添加自定义拼音，所有汉字均支持自由增删组词（自动保存在本机）。点击“一键打印”或导出 PDF 后请选 A4 纸、缩放选“实际大小”。</div>
 </div>
 <div class="wrap"><div id="root"></div></div>
 <script>
@@ -102,7 +102,7 @@ function defWords(c,p){return (DB&&DB[c]&&DB[c].w&&Array.isArray(DB[c].w[p]))?DB
 function isDefOn(c,p){
   if(isCustomPy(c,p))return true;
   if(DB&&DB[c]&&DB[c].w)return defWords(c,p).length>0;
-  return true;
+  return Boolean(DB&&DB[c]&&p===DB[c].p[0]);
 }
 function isOn(c,p){
   if(cfg[c]&&cfg[c].on&&Object.prototype.hasOwnProperty.call(cfg[c].on,p))return Boolean(cfg[c].on[p]);
