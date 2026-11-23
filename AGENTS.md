@@ -8,15 +8,23 @@
 
 - 在线地址：`https://blackroy1810.github.io/hanzi/`（部署于 GitHub Pages，家人常用 iPhone Safari 打开）
 
+## 设计理念与演进原则
+
+本项目的核心准则是**大道至简**与**技术美学**，所有需求评估、方案设计与代码审阅须共同遵守：
+
+- **聚焦不变的本质**：教材会改版、年级会过去，但“输入任意汉字 → 清晰练笔顺 → 有效复习验收”的本质不变。**不引入绑定特定教材版本或固定课表的重维护内容**，不给工具人为画边界。
+- **极简克制，拒绝装饰性妥协**：只保留对学字真正必要的功能与控件，不做纯视觉皮肤、花哨主题、多字体切换等脱离学字本质的喜好型堆砌。
+- **优先“看不见的功力”**：把精力集中在实用性、变通性、易用性与底层工程质量（离线单文件压缩、现代常用全字库、词库净化、自适应排版、清晰锐利的打印/导出、移动端零阻力交互）——能由底层自动做对的，不交给用户配置。
+
 ## 仓库结构
 
 - `src/app.html`：页面与全部前端逻辑，唯一的运行时源码文件。内含字库占位符 `__DB__`，**严禁修改或删除**。
 - `data/polyphones.json`：小学常见多音字例词表（组词最高优先级；表内字默认仅勾选有例词的常用读音，隐藏冷僻音）。
 - `data/words.json`：常见普通汉字手写推荐组词表（次高优先级）。
-- `scripts/build.js`：构建脚本。解码 GB2312 一级字（约 3755 个常用字），从 `hanzi-writer-data`、`pinyin-pro` 组装字库，按三层优先级（`data/polyphones.json` > `data/words.json` > `@pinyin-pro/data` 自动兜底）合入推荐组词并执行例词校验，经 gzip + base64 压缩后替换 `__DB__`，输出单文件 `dist/index.html`。
+- `scripts/build.js`：构建脚本。组装 GB2312 一级+二级全集与 `@pinyin-pro/data/modern.json` 现代补字（约 6988 字），对 `hanzi-writer-data` 笔画执行 SVG 相对路径压缩与轻量量化，结合 `pinyin-pro` 按三层优先级（`data/polyphones.json` > `data/words.json` > `@pinyin-pro/data` 自动兜底）合入推荐组词并执行例词校验，经 gzip + base64 压缩后替换 `__DB__`，输出单文件 `dist/index.html`。
 - `scripts/word-dict.js`：构建期自动词典提取模块。仅在构建时读取 `@pinyin-pro/data` 为手写词表外汉字补齐常用组词，内置少儿友好敏感词过滤（`BLOCKED_RE`）、单音字轻声归并及未收录多音字冷僻音词频收敛；不进入运行时代码。
-- `scripts/check-polyphones.js`：构建期例词校验脚本（支持单独运行），使用 `pinyin-pro` 检查 `data/polyphones.json` 与 `data/words.json` 的缺字、重复定义及读音一致性；异常仅输出警告，不阻断构建。
-- `tests/smoke.test.js`：基于 `jsdom` 的冒烟测试，验证 `dist/index.html` 无脚本错误、全字库组词覆盖率（≥ 98%）与词条过滤、多音字勾选与冷僻音收敛、自定义拼音与全汉字组词增删、一键打印、Markdown 与 PDF 生成器及校验脚本。
+- `scripts/check-polyphones.js`：构建期例词校验脚本（支持单独运行），使用 `pinyin-pro` 检查 `data/polyphones.json` 与 `data/words.json` 的缺字、重复定义及读音一致性（内置人工核验的 `pinyin-pro` 已知误判白名单）；异常仅输出警告，不阻断构建。
+- `tests/smoke.test.js`：基于 `jsdom` 的冒烟测试，验证 `dist/index.html` 无脚本错误、扩容字库与相对路径校验、组词覆盖率（一级常用字 ≥ 98%、全库 ≥ 85%）与词条过滤、多音字勾选与冷僻音收敛、自定义拼音与全汉字组词增删、一键打印、Markdown 与 PDF 生成器及校验脚本。
 - `.github/workflows/ci.yml`：PR 自动执行 `build` job（安装、构建、冒烟测试）；合并到 `main` 后自动发布 `dist` 至 GitHub Pages。
 - `.github/ISSUE_TEMPLATE/task.md`：多 LLM 协作任务单模板。
 - `.github/pull_request_template.md`：PR 审阅、门禁与实测清单模板。
