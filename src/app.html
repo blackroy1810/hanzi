@@ -10,7 +10,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"P
 .ui h1{font-size:17px;margin:0 0 8px}
 textarea{width:100%;box-sizing:border-box;font-size:20px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-family:inherit;resize:vertical}
 .opts{display:flex;flex-wrap:wrap;gap:10px 16px;margin:8px 0;font-size:14px;align-items:center}
-select,input[type=text]{font-size:14px;padding:4px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+select,input[type=text],input[type=date]{font-size:14px;padding:4px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.dt-grp{display:inline-flex;align-items:center;gap:6px}
+.dt-blank{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.dt-blank input{margin:0;accent-color:var(--accent)}
 button.alt{background:#555}button:disabled{opacity:.5}button{font-size:15px;padding:8px 18px;border:0;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer}
 button.mini{font-size:12px;padding:3px 8px;border-radius:6px;background:#666;color:#fff;line-height:1.4}
 button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
@@ -28,6 +31,10 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 .pw-list{display:flex;flex-direction:column;gap:6px;margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
 .pw-row{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;font-size:13px}
 .pw-py{font-weight:600;color:var(--accent);min-width:44px;font-family:Arial,"PingFang SC",sans-serif}
+.pw-py.py-edit{cursor:pointer;border-bottom:1px dashed currentColor;min-width:0;padding:0 2px}
+.py-inp{width:64px;font-size:13px;padding:1px 5px}
+.srow .px{background:none;border:0;color:var(--muted);padding:0 2px;font-size:13px;line-height:1;cursor:pointer}
+.srow .px:hover{color:var(--accent)}
 .wchip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:6px;background:var(--panel);border:1px solid var(--line);font-size:14px}
 .wempty{font-size:12px;color:var(--muted)}
 .wadd{width:84px;font-size:13px;padding:2px 6px}
@@ -39,9 +46,12 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 #msg{font-size:13px;color:#c0392b;margin-top:6px;min-height:1em}
 .tip{font-size:12px;opacity:.7;margin-top:4px}
 .wrap{padding:12px 0;overflow:hidden}
-.sheet{background:#fff;color:#222;width:210mm;height:297mm;margin:0 auto 12px;padding:10mm;box-sizing:border-box;page-break-after:always;overflow:hidden;font-family:"Kaiti SC","KaiTi","PingFang SC",sans-serif}
-.top{height:8mm;font-size:11pt;display:flex;justify-content:space-between;color:#555}
-.head{height:9mm;display:flex;align-items:baseline;justify-content:space-between;gap:4mm}
+.sheet{background:#fff;color:#222;width:210mm;height:297mm;margin:0 auto 12px;padding:10mm 13.25mm;box-sizing:border-box;page-break-after:always;overflow:hidden;font-family:"Kaiti SC","KaiTi","PingFang SC",sans-serif}
+.top{height:8mm;font-size:11pt;display:flex;justify-content:space-between;align-items:baseline;color:#555}
+.top-r{display:inline-flex;align-items:baseline;white-space:nowrap}
+.u{display:inline-block;border-bottom:.3mm solid #555;padding:0 .6mm .35mm;line-height:1.1;text-align:center;box-sizing:border-box}
+.u.dt-val{padding:0 1.2mm .35mm}
+.head{height:8.5mm;display:flex;align-items:baseline;justify-content:space-between;gap:4mm}
 .py-line{--sc:1;--py-pt:17pt;flex:1;min-width:0;overflow:hidden;white-space:nowrap}
 .py-line.multi{--py-pt:15.5pt}
 .py-in{display:inline-flex;align-items:baseline;white-space:nowrap}
@@ -51,7 +61,8 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 .wd{font-size:calc(13.5pt * var(--sc));color:#333;margin-left:calc(1.8mm * var(--sc))}
 .meta{font-size:9pt;color:#888;flex:none;white-space:nowrap}
 .row{display:flex}
-.row.steps{margin-bottom:3mm}
+.row.steps-r2{margin-top:-.35mm}
+.row.blank-row:last-child{margin-bottom:0!important}
 .cell{box-sizing:border-box;border:.35mm solid #444;flex:none;margin-right:-.35mm}
 svg{display:block}
 @page{size:A4;margin:0}
@@ -63,6 +74,7 @@ svg{display:block}
 <div class="opts">
 <label>每页字数 <select id="per"><option>4</option><option>5</option><option selected>6</option></select></label>
 <label>描红格 <select id="ghost"><option>0</option><option>2</option><option selected>3</option><option>4</option></select></label>
+<span class="dt-grp"><label>日期 <input type="date" id="dt"></label><label class="dt-blank"><input type="checkbox" id="dtBlank"> 手填</label></span>
 <button id="bprint" onclick="doPrint()">一键打印</button><button id="bpdf" class="alt" onclick="exportPdf()">导出 PDF</button><button id="bmd" class="alt" onclick="exportMd()">导出 Markdown</button>
 </div>
 <div id="poly"></div>
@@ -77,6 +89,8 @@ const $=id=>document.getElementById(id);
 let DB=null;
 let cfg={};
 let singlesOpen=null;
+let lastCharKey='';
+let inpTimer=null;
 const CFG_KEY='hz_poly_v1';
 const L='stroke="#dc9a92" stroke-width="18" stroke-dasharray="26 22"';
 const grid='<line x1="512" y1="0" x2="512" y2="1024" '+L+'/><line x1="0" y1="512" x2="1024" y2="512" '+L+'/>';
@@ -118,15 +132,36 @@ function hasWordOverride(c,p){
   return a.length!==b.length||a.some((x,i)=>x!==b[i]);
 }
 function isPoly(c){return Boolean(DB&&DB[c]&&(DB[c].p.length>1||(cfg[c]&&cfg[c].cp&&cfg[c].cp.length>0)));}
+function singlePy(c){
+  if(cfg[c]&&typeof cfg[c].sp==='string'&&cfg[c].sp.trim())return cfg[c].sp.trim();
+  return (DB&&DB[c])?DB[c].p[0]:'';
+}
+function hasSinglePyOverride(c){return Boolean(cfg[c]&&typeof cfg[c].sp==='string'&&cfg[c].sp.trim()&&DB&&DB[c]&&cfg[c].sp.trim()!==DB[c].p[0]);}
 function activeEntries(c){
   if(!DB||!DB[c])return [];
-  if(!isPoly(c))return [{p:DB[c].p[0],w:wordsOf(c,DB[c].p[0])}];
+  if(!isPoly(c))return [{p:singlePy(c),w:wordsOf(c,DB[c].p[0])}];
   return allPys(c).filter(p=>isOn(c,p)).map(p=>({p,w:wordsOf(c,p)}));
 }
-function togglePy(c,p,val){
+function setSinglePy(c,raw){
+  const py=String(raw||'').trim();
   const st=ensureCfg(c);
-  st.on[p]=typeof val==='boolean'?val:!isOn(c,p);
-  saveCfg();buildPoly();render();
+  if(!py||(DB&&DB[c]&&py===DB[c].p[0]))delete st.sp;
+  else st.sp=py;
+  saveCfg();updateCharUi(c);render();
+}
+function togglePy(c,p,val){
+  const next=typeof val==='boolean'?val:!isOn(c,p);
+  if(!next&&isOn(c,p)){
+    const onCount=allPys(c).filter(x=>isOn(c,x)).length;
+    if(onCount<=1){
+      updateCharUi(c,{type:'pycb',py:p});
+      $('msg').textContent='「'+c+'」至少保留一个读音';
+      return;
+    }
+  }
+  const st=ensureCfg(c);
+  st.on[p]=next;
+  saveCfg();updateCharUi(c,{type:'pycb',py:p});render();
 }
 function addWords(c,p,raw){
   const parts=String(raw||'').split(/[\s,，、;；]+/).map(x=>x.trim()).filter(Boolean);
@@ -135,34 +170,42 @@ function addWords(c,p,raw){
   const cur=[...wordsOf(c,p)];
   parts.forEach(w=>{if(!cur.includes(w))cur.push(w);});
   st.w[p]=cur;
-  saveCfg();buildPoly();render();
+  saveCfg();updateCharUi(c,{type:'wadd',py:p});render();
 }
 function delWord(c,p,word){
   const st=ensureCfg(c);
   st.w[p]=wordsOf(c,p).filter(w=>w!==word);
-  saveCfg();buildPoly();render();
+  saveCfg();updateCharUi(c,{type:'wadd',py:p});render();
 }
 function resetWords(c,p){
   if(cfg[c]&&cfg[c].w)delete cfg[c].w[p];
-  saveCfg();buildPoly();render();
+  saveCfg();updateCharUi(c,{type:'wadd',py:p});render();
 }
 function addCustomPy(c,raw){
   const py=String(raw||'').trim();
   if(!py)return;
+  const wasPoly=isPoly(c);
   const st=ensureCfg(c);
   if(!DB[c].p.includes(py)&&!st.cp.includes(py)){
     st.cp.push(py);
     if(!Object.prototype.hasOwnProperty.call(st.w,py))st.w[py]=[];
   }
   st.on[py]=true;
-  saveCfg();buildPoly();render();
+  saveCfg();
+  if(wasPoly)updateCharUi(c,{type:'addpy'});else buildPoly();
+  render();
 }
 function delCustomPy(c,py){
   if(!cfg[c])return;
   if(Array.isArray(cfg[c].cp))cfg[c].cp=cfg[c].cp.filter(x=>x!==py);
   if(cfg[c].on)delete cfg[c].on[py];
   if(cfg[c].w)delete cfg[c].w[py];
-  saveCfg();buildPoly();render();
+  if(isPoly(c)&&!allPys(c).some(x=>isOn(c,x))&&DB&&DB[c]){
+    ensureCfg(c).on[DB[c].p[0]]=true;
+  }
+  saveCfg();
+  if(isPoly(c))updateCharUi(c);else buildPoly();
+  render();
 }
 function cell(s,upto,mode,mm){
   let g='';
@@ -180,8 +223,31 @@ function buildWordRow(c,p,showChar){
     const ch=document.createElement('span');ch.className='pchar';ch.textContent=c;
     row.appendChild(ch);
   }
-  const pyLab=document.createElement('span');pyLab.className='pw-py';pyLab.textContent=p;
-  row.appendChild(pyLab);
+  const pyLab=document.createElement('span');
+  if(showChar){
+    const curPy=singlePy(c);
+    pyLab.className='pw-py py-edit';pyLab.textContent=curPy;pyLab.title='点击修改读音';
+    pyLab.onclick=()=>{
+      const pi=document.createElement('input');pi.type='text';pi.className='py-inp';pi.value=curPy;pi.setAttribute('aria-label',c+' 自定义拼音');
+      let done=false;
+      const commit=()=>{if(done)return;done=true;setSinglePy(c,pi.value);};
+      pi.onblur=commit;
+      pi.onkeydown=e=>{
+        if(e.key==='Enter'){e.preventDefault();commit();}
+        else if(e.key==='Escape'){done=true;pi.replaceWith(pyLab);}
+      };
+      pyLab.replaceWith(pi);pi.focus();pi.select();
+    };
+    row.appendChild(pyLab);
+    if(hasSinglePyOverride(c)){
+      const rx=document.createElement('button');rx.type='button';rx.className='px';rx.textContent='×';rx.title='恢复默认读音';
+      rx.onclick=()=>setSinglePy(c,'');
+      row.appendChild(rx);
+    }
+  }else{
+    pyLab.className='pw-py';pyLab.textContent=p;
+    row.appendChild(pyLab);
+  }
   const curWords=wordsOf(c,p);
   if(curWords.length){
     curWords.forEach(w=>{
@@ -208,49 +274,88 @@ function buildWordRow(c,p,showChar){
   }
   return row;
 }
+function buildPolyCard(c){
+  const card=document.createElement('div');card.className='pcard';card.dataset.char=c;
+  const top=document.createElement('div');top.className='pcard-top';
+  const b=document.createElement('span');b.className='pchar';b.textContent=c;
+  top.appendChild(b);
+  const pys=allPys(c);
+  pys.forEach(p=>{
+    const on=isOn(c,p);
+    const lb=document.createElement('label');lb.className='ptag'+(on?' on':'');lb.dataset.py=p;
+    const cb=document.createElement('input');cb.type='checkbox';cb.checked=on;
+    cb.onchange=()=>togglePy(c,p,cb.checked);
+    const tx=document.createElement('span');tx.textContent=p;
+    lb.append(cb,tx);
+    if(isCustomPy(c,p)){
+      const dx=document.createElement('button');dx.type='button';dx.className='px';dx.textContent='×';dx.title='删除自定义拼音';
+      dx.onclick=e=>{e.preventDefault();e.stopPropagation();delCustomPy(c,p);};
+      lb.appendChild(dx);
+    }
+    top.appendChild(lb);
+  });
+  const addPyBox=document.createElement('span');addPyBox.className='padd-py';
+  const pi=document.createElement('input');pi.type='text';pi.placeholder='自定义拼音';pi.setAttribute('aria-label',c+' 自定义拼音');
+  const pb=document.createElement('button');pb.type='button';pb.className='mini';pb.textContent='+ 拼音';
+  const doAddPy=()=>{const v=pi.value.trim();if(v)addCustomPy(c,v);};
+  pb.onclick=doAddPy;
+  pi.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();doAddPy();}};
+  addPyBox.append(pi,pb);
+  top.appendChild(addPyBox);
+  card.appendChild(top);
+
+  const onPys=pys.filter(p=>isOn(c,p));
+  if(onPys.length){
+    const wl=document.createElement('div');wl.className='pw-list';
+    onPys.forEach(p=>wl.appendChild(buildWordRow(c,p,false)));
+    card.appendChild(wl);
+  }
+  return card;
+}
+function updateSinglesSummary(){
+  const det=$('singles').querySelector('details');
+  if(!det||!DB)return;
+  const singles=chars().filter(c=>DB[c]&&!isPoly(c));
+  const missingCount=singles.filter(c=>wordsOf(c,DB[c].p[0]).length===0).length;
+  const sum=det.querySelector('summary');
+  if(sum){
+    sum.textContent=missingCount>0
+      ?('普通汉字组词设置（'+singles.length+' 字，其中 '+missingCount+' 字暂无推荐组词；点击拼音可改音）')
+      :('普通汉字组词设置（'+singles.length+' 字，点击展开增删组词或改音）');
+  }
+}
+function updateCharUi(c,focus){
+  if(!DB||!DB[c])return;
+  if(isPoly(c)){
+    const old=[...$('poly').children].find(el=>el.dataset.char===c);
+    if(!old){buildPoly();return;}
+    const card=buildPolyCard(c);
+    old.replaceWith(card);
+    if(focus){
+      let target=null;
+      if(focus.type==='wadd')target=[...card.querySelectorAll('.pw-row')].find(r=>r.dataset.py===focus.py)?.querySelector('.wadd');
+      else if(focus.type==='addpy')target=card.querySelector('.padd-py input');
+      else if(focus.type==='pycb')target=[...card.querySelectorAll('.ptag')].find(t=>t.dataset.py===focus.py)?.querySelector('input');
+      if(target)target.focus();
+    }
+  }else{
+    const old=[...$('singles').querySelectorAll('.srow')].find(el=>el.dataset.char===c);
+    if(!old){buildPoly();return;}
+    const row=buildWordRow(c,DB[c].p[0],true);
+    old.replaceWith(row);
+    updateSinglesSummary();
+    if(focus&&focus.type==='wadd'){
+      const wi=row.querySelector('.wadd');
+      if(wi)wi.focus();
+    }
+  }
+}
 function buildPoly(){
   const box=$('poly');box.innerHTML='';
   const sbox=$('singles');sbox.innerHTML='';
   if(!DB)return;
   const list=chars().filter(c=>DB[c]);
-  list.filter(c=>isPoly(c)).forEach(c=>{
-    const card=document.createElement('div');card.className='pcard';card.dataset.char=c;
-    const top=document.createElement('div');top.className='pcard-top';
-    const b=document.createElement('span');b.className='pchar';b.textContent=c;
-    top.appendChild(b);
-    const pys=allPys(c);
-    pys.forEach(p=>{
-      const on=isOn(c,p);
-      const lb=document.createElement('label');lb.className='ptag'+(on?' on':'');lb.dataset.py=p;
-      const cb=document.createElement('input');cb.type='checkbox';cb.checked=on;
-      cb.onchange=()=>togglePy(c,p,cb.checked);
-      const tx=document.createElement('span');tx.textContent=p;
-      lb.append(cb,tx);
-      if(isCustomPy(c,p)){
-        const dx=document.createElement('button');dx.type='button';dx.className='px';dx.textContent='×';dx.title='删除自定义拼音';
-        dx.onclick=e=>{e.preventDefault();e.stopPropagation();delCustomPy(c,p);};
-        lb.appendChild(dx);
-      }
-      top.appendChild(lb);
-    });
-    const addPyBox=document.createElement('span');addPyBox.className='padd-py';
-    const pi=document.createElement('input');pi.type='text';pi.placeholder='自定义拼音';pi.setAttribute('aria-label',c+' 自定义拼音');
-    const pb=document.createElement('button');pb.type='button';pb.className='mini';pb.textContent='+ 拼音';
-    const doAddPy=()=>{const v=pi.value.trim();if(v)addCustomPy(c,v);};
-    pb.onclick=doAddPy;
-    pi.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();doAddPy();}};
-    addPyBox.append(pi,pb);
-    top.appendChild(addPyBox);
-    card.appendChild(top);
-
-    const onPys=pys.filter(p=>isOn(c,p));
-    if(onPys.length){
-      const wl=document.createElement('div');wl.className='pw-list';
-      onPys.forEach(p=>wl.appendChild(buildWordRow(c,p,false)));
-      card.appendChild(wl);
-    }
-    box.appendChild(card);
-  });
+  list.filter(c=>isPoly(c)).forEach(c=>box.appendChild(buildPolyCard(c)));
 
   const singles=list.filter(c=>!isPoly(c));
   if(singles.length){
@@ -260,13 +365,11 @@ function buildPoly(){
     det.open=initOpen;
     det.addEventListener('toggle',()=>{if(det.open!==initOpen||singlesOpen!==null)singlesOpen=det.open;});
     const sum=document.createElement('summary');
-    sum.textContent=missingCount>0
-      ?('普通汉字组词设置（'+singles.length+' 字，其中 '+missingCount+' 字暂无推荐组词）')
-      :('普通汉字组词设置（'+singles.length+' 字，点击展开增删）');
     const sl=document.createElement('div');sl.className='slist';
     singles.forEach(c=>sl.appendChild(buildWordRow(c,DB[c].p[0],true)));
     det.append(sum,sl);
     sbox.appendChild(det);
+    updateSinglesSummary();
   }
 }
 function headHtml(c){
@@ -276,6 +379,8 @@ function headHtml(c){
   return '<div class="py-line'+(multi?' multi':'')+'"><span class="py-in">'+items+'</span></div>';
 }
 function fitHeads(){
+  const r=$('root'),prev=r.style.zoom;
+  r.style.zoom='1';
   document.querySelectorAll('.py-line').forEach(line=>{
     line.style.setProperty('--sc','1');
     const inn=line.firstElementChild;
@@ -286,24 +391,145 @@ function fitHeads(){
       line.style.setProperty('--sc',sc.toFixed(4));
     }
   });
+  r.style.zoom=prev;
+}
+const PAGE={W:210,H:297,PAD_X:13.25,PAD_Y:10,TOP_H:8,CONTENT_W:183.5,BODY_H:269,CELL:17,BORDER:0.35,COLS:11,WRAP_MIN:15,BLANK_TOP_GAP:15,BLANK_TOP_MIN:11,BLANK_ROW_GAP:13,BLANK_ROW_MIN:10,MAX_BLANK_ROWS:5};
+function localDateParts(d=new Date()){
+  const y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate();
+  const pad=n=>String(n).padStart(2,'0');
+  const wk='日一二三四五六'[d.getDay()];
+  return {ymd:y+'-'+pad(m)+'-'+pad(day),label:y+'年'+m+'月'+day+'日（'+wk+'）'};
+}
+function selectedDateInfo(){
+  const blankEl=$('dtBlank'),dtEl=$('dt');
+  if(blankEl&&blankEl.checked)return {blank:true,ymd:localDateParts().ymd,label:''};
+  const v=dtEl?dtEl.value:'';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v)){
+    const [y,m,day]=v.split('-').map(Number);
+    const p=localDateParts(new Date(y,m-1,day));
+    return {blank:false,ymd:p.ymd,label:p.label};
+  }
+  if(dtEl&&!v)return {blank:true,ymd:localDateParts().ymd,label:''};
+  const p=localDateParts();
+  return {blank:false,ymd:p.ymd,label:p.label};
+}
+const today=()=>selectedDateInfo().ymd;
+function topRightHtml(dt){
+  const namePart='姓名：<span class="u" style="width:22mm">&nbsp;</span>　日期：';
+  if(dt.blank){
+    return '<span class="top-r">'+namePart+'<span class="u" style="width:11mm">&nbsp;</span>年<span class="u" style="width:6.5mm">&nbsp;</span>月<span class="u" style="width:6.5mm">&nbsp;</span>日（<span class="u" style="width:5.5mm">&nbsp;</span>）</span>';
+  }
+  return '<span class="top-r">'+namePart+'<span class="u dt-val">'+esc(dt.label)+'</span></span>';
+}
+function layoutSheet(items,per){
+  const fillBlank=(per===4)||(items.length<per);
+  let headH=8.5,stepGap=fillBlank?2.0:2.2,minBlockGap=fillBlank?3.5:1.6;
+  const specs=items.map(c=>{
+    const s=DB[c].s,n=s.length,cnt=n+1,wrapped=n>=PAGE.WRAP_MIN;
+    const row1=wrapped?Math.ceil(cnt/2):cnt;
+    const wMaxX=Math.min(wrapped?12:13,Math.floor(((PAGE.CONTENT_W+(row1-1)*PAGE.BORDER)/row1)*10)/10);
+    return {c,s,n,cnt,wrapped,row1,wMaxX};
+  });
+  let wrapCap=fillBlank?11.0:(per===5?11.5:10.5);
+  const measure=(hh,sg,bg,wc)=>{
+    let sum=0;
+    specs.forEach(sp=>{
+      const w=sp.wrapped?Math.min(sp.wMaxX,wc):sp.wMaxX;
+      const sh=sp.wrapped?(2*w-PAGE.BORDER):w;
+      sum+=hh+sh+sg+PAGE.CELL;
+    });
+    return sum+Math.max(0,specs.length-1)*bg;
+  };
+  const wrappedSpecs=specs.filter(sp=>sp.wrapped);
+  if(wrappedSpecs.length&&measure(headH,stepGap,minBlockGap,wrapCap)>PAGE.BODY_H){
+    headH=8.0;stepGap=1.8;minBlockGap=fillBlank?2.5:1.2;
+    const fixedH=specs.reduce((acc,sp)=>acc+headH+stepGap+PAGE.CELL+(sp.wrapped?0:sp.wMaxX),0)+Math.max(0,specs.length-1)*minBlockGap;
+    const availPerWrap=(PAGE.BODY_H-fixedH)/wrappedSpecs.length;
+    wrapCap=Math.max(7.5,Math.min(wrapCap,Math.floor(((availPerWrap+PAGE.BORDER)/2)*10)/10));
+  }
+  const blockHeights=specs.map(sp=>{
+    const w=sp.wrapped?Math.min(sp.wMaxX,wrapCap):sp.wMaxX;
+    const stepsH=sp.wrapped?(2*w-PAGE.BORDER):w;
+    return {w,stepsH,h:headH+stepsH+stepGap+PAGE.CELL};
+  });
+  const totalContentH=blockHeights.reduce((a,b)=>a+b.h,0);
+  let blockGap=minBlockGap;
+  if(!fillBlank&&specs.length>1){
+    const slack=(PAGE.BODY_H-totalContentH)/(specs.length-1);
+    blockGap=Math.max(minBlockGap,Math.min(13.5,slack));
+  }
+  let y=PAGE.PAD_Y+PAGE.TOP_H;
+  const blocks=specs.map((sp,idx)=>{
+    const bh=blockHeights[idx];
+    const gapAfter=idx<specs.length-1?blockGap:0;
+    const blk={
+      c:sp.c,s:sp.s,n:sp.n,wrapped:sp.wrapped,row1:sp.row1,
+      w:bh.w,stepsH:bh.stepsH,headH,stepGap,y,
+      stepsY:y+headH,
+      pracY:y+headH+bh.stepsH+stepGap,
+      h:bh.h,gapAfter
+    };
+    y+=bh.h+gapAfter;
+    return blk;
+  });
+  const usedBodyH=y-(PAGE.PAD_Y+PAGE.TOP_H);
+  const blankYs=[];
+  let blankTopGap=0,blankRowGap=PAGE.BLANK_ROW_GAP;
+  if(fillBlank){
+    const rem=PAGE.BODY_H-usedBodyH;
+    const desiredRows=Math.min(PAGE.MAX_BLANK_ROWS,Math.max(0,6-items.length));
+    const maxFitRows=Math.floor((rem-PAGE.BLANK_TOP_MIN+PAGE.BLANK_ROW_MIN)/(PAGE.CELL+PAGE.BLANK_ROW_MIN));
+    const rows=Math.min(desiredRows,Math.max(0,maxFitRows));
+    if(rows>0){
+      const needStd=PAGE.BLANK_TOP_GAP+rows*PAGE.CELL+(rows-1)*PAGE.BLANK_ROW_GAP;
+      if(needStd<=rem){
+        blankTopGap=PAGE.BLANK_TOP_GAP;
+        blankRowGap=PAGE.BLANK_ROW_GAP;
+      }else{
+        const availGaps=rem-rows*PAGE.CELL;
+        blankTopGap=Math.max(PAGE.BLANK_TOP_MIN,Math.min(PAGE.BLANK_TOP_GAP,Math.floor((availGaps/rows)*10)/10));
+        blankRowGap=rows>1?Math.max(PAGE.BLANK_ROW_MIN,Math.min(PAGE.BLANK_ROW_GAP,Math.floor(((availGaps-blankTopGap)/(rows-1))*10)/10)):PAGE.BLANK_ROW_GAP;
+      }
+      let by=y+blankTopGap;
+      for(let r=0;r<rows;r++){
+        blankYs.push(by);
+        by+=PAGE.CELL+blankRowGap;
+      }
+    }
+  }
+  return {blocks,blankYs,blankTopGap,blankRowGap};
 }
 function render(){
   if(!DB)return;
   const all=chars(),ok=all.filter(c=>DB[c]),bad=all.filter(c=>!DB[c]);
   $('msg').textContent=bad.length?('暂无数据：'+bad.join(' ')):'';
   const per=+$('per').value,gh=+$('ghost').value;
-  const bh=(269/per).toFixed(2);
+  const dtInfo=selectedDateInfo();
+  const topRight=topRightHtml(dtInfo);
+  let emptyRowHtml='';for(let k=0;k<PAGE.COLS;k++)emptyRowHtml+=cell([],0,'none',PAGE.CELL);
   let out='';
   for(let i=0;i<ok.length;i+=per){
-    out+='<div class="sheet"><div class="top"><span>汉字笔顺练习</span><span>姓名：________　日期：________</span></div>';
-    ok.slice(i,i+per).forEach(c=>{
-      const s=DB[c].s,n=s.length;
-      const w=Math.min(13,Math.floor(1820/(n+1))/10);
-      let st=cell(s,0,'full',w);
-      for(let k=1;k<=n;k++)st+=cell(s,k,'step',w);
-      let bl='';for(let k=0;k<11;k++)bl+=cell(s,0,k<gh?'ghost':'none',17);
-      out+='<div style="height:'+bh+'mm" data-char="'+esc(c)+'"><div class="head">'+headHtml(c)+'<span class="meta">'+esc(c)+' · '+n+' 画</span></div><div class="row steps">'+st+'</div><div class="row">'+bl+'</div></div>';
+    const pageItems=ok.slice(i,i+per);
+    const lay=layoutSheet(pageItems,per);
+    out+='<div class="sheet"><div class="top"><span>汉字笔顺练习</span>'+topRight+'</div>';
+    lay.blocks.forEach(b=>{
+      let r1=cell(b.s,0,'full',b.w);
+      for(let k=1;k<b.row1;k++)r1+=cell(b.s,k,'step',b.w);
+      let stepsHtml='<div class="row">'+r1+'</div>';
+      if(b.wrapped){
+        let r2='';
+        for(let k=b.row1;k<=b.n;k++)r2+=cell(b.s,k,'step',b.w);
+        stepsHtml+='<div class="row steps-r2">'+r2+'</div>';
+      }
+      let bl='';for(let k=0;k<PAGE.COLS;k++)bl+=cell(b.s,0,k<gh?'ghost':'none',PAGE.CELL);
+      const mb=b.gapAfter?('margin-bottom:'+b.gapAfter.toFixed(2)+'mm'):'';
+      out+='<div style="'+mb+'" data-char="'+esc(b.c)+'" data-wrapped="'+(b.wrapped?'1':'0')+'"><div class="head" style="height:'+b.headH+'mm">'+headHtml(b.c)+'<span class="meta">'+esc(b.c)+' · '+b.n+' 画</span></div><div class="steps-wrap" style="margin-bottom:'+b.stepGap+'mm">'+stepsHtml+'</div><div class="row">'+bl+'</div></div>';
     });
+    if(lay.blankYs.length){
+      out+='<div class="blank-area" style="margin-top:'+lay.blankTopGap.toFixed(2)+'mm">';
+      for(let r=0;r<lay.blankYs.length;r++)out+='<div class="row blank-row" style="margin-bottom:'+lay.blankRowGap.toFixed(2)+'mm">'+emptyRowHtml+'</div>';
+      out+='</div>';
+    }
     out+='</div>';
   }
   $('root').innerHTML=out||'<p style="text-align:center;opacity:.6">输入生字后这里会出现预览</p>';
@@ -312,14 +538,7 @@ function render(){
   try{localStorage.setItem('hz_in',$('inp').value);}catch(e){}
 }
 function fit(){const w=Math.min(1,(innerWidth-8)/794);$('root').style.zoom=w;}
-
-let DL=null;
-try{if(window.claude&&claude.use)claude.use('downloads').then(d=>{DL=d;}).catch(()=>{});}catch(e){}
-const today=()=>new Date().toISOString().slice(0,10);
 async function saveFile(name,blob){
-  if(DL){try{await DL.save({filename:name,data:blob});return true;}
-  catch(e){if(e&&e.code==='declined')return false;
-    if(e&&e.code!=='unavailable'&&e.code!=='not_granted'){$('msg').textContent='保存失败：'+(e.message||e.code);return false;}}}
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);return true;
 }
@@ -354,18 +573,19 @@ function measureHeadEntries(ctx,entries,pyBase,sc,KT){
   });
   return total;
 }
-function dHead(ctx,c,n,y0,KT){
-  const y=(y0+6.5)*MM;
+function dHead(ctx,c,n,y0,headH,KT){
+  const X0=PAGE.PAD_X,X1=PAGE.PAD_X+PAGE.CONTENT_W;
+  const y=(y0+headH-2.2)*MM;
   const meta=c+' · '+n+' 画';
   ctx.fillStyle='#888';ctx.font=pt(9)+'px '+KT;ctx.textAlign='right';
   const metaW=ctx.measureText(meta).width;
-  ctx.fillText(meta,200*MM,y);
+  ctx.fillText(meta,X1*MM,y);
   ctx.textAlign='left';
   const entries=activeEntries(c);
   if(!entries.length)return;
   const multi=isPoly(c)||entries.some(e=>e.w.length>0);
   const pyBase=multi?15.5:17;
-  const availW=190*MM-metaW-4*MM;
+  const availW=PAGE.CONTENT_W*MM-metaW-4*MM;
   let sc=1;
   const rawW=measureHeadEntries(ctx,entries,pyBase,1,KT);
   if(rawW>availW&&availW>0){
@@ -373,7 +593,7 @@ function dHead(ctx,c,n,y0,KT){
     const checkW=measureHeadEntries(ctx,entries,pyBase,sc,KT);
     if(checkW>availW)sc=Math.max(0.4,sc*(availW/checkW));
   }
-  let x=10*MM;
+  let x=X0*MM;
   entries.forEach((e,idx)=>{
     ctx.fillStyle='#c0392b';ctx.font=pt(pyBase*sc)+'px Arial,"PingFang SC",sans-serif';
     ctx.fillText(e.p,x,y);
@@ -388,21 +608,48 @@ function dHead(ctx,c,n,y0,KT){
     if(idx<entries.length-1)x+=4.5*sc*MM;
   });
 }
+function dTopBar(ctx,X0,X1,KT){
+  const y=15.5*MM,ly=y+0.8*MM;
+  ctx.fillStyle='#555';ctx.strokeStyle='#555';ctx.lineWidth=.3*MM;ctx.setLineDash([]);
+  ctx.font=pt(11)+'px '+KT;ctx.textBaseline='alphabetic';ctx.textAlign='left';
+  ctx.fillText('汉字笔顺练习',X0*MM,y);
+  const dt=selectedDateInfo();
+  const segs=dt.blank
+    ?[{t:'姓名：'},{l:22},{t:'　日期：'},{l:11},{t:'年'},{l:6.5},{t:'月'},{l:6.5},{t:'日（'},{l:5.5},{t:'）'}]
+    :[{t:'姓名：'},{l:22},{t:'　日期：'},{ul:dt.label,pad:1.2}];
+  const segW=s=>s.t?ctx.measureText(s.t).width:(s.l?s.l*MM:(ctx.measureText(s.ul).width+2*s.pad*MM));
+  let x=X1*MM-segs.reduce((a,s)=>a+segW(s),0);
+  segs.forEach(s=>{
+    const w=segW(s);
+    if(s.t){ctx.fillText(s.t,x,y);}
+    else if(s.l){ctx.beginPath();ctx.moveTo(x,ly);ctx.lineTo(x+w,ly);ctx.stroke();}
+    else if(s.ul){
+      ctx.fillText(s.ul,x+s.pad*MM,y);
+      ctx.beginPath();ctx.moveTo(x,ly);ctx.lineTo(x+w,ly);ctx.stroke();
+    }
+    x+=w;
+  });
+}
 function dSheet(items,per,gh){
-  const cv=document.createElement('canvas');cv.width=Math.round(210*MM);cv.height=Math.round(297*MM);
+  const cv=document.createElement('canvas');cv.width=Math.round(PAGE.W*MM);cv.height=Math.round(PAGE.H*MM);
   const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
   const KT='"Kaiti SC","KaiTi","PingFang SC","Microsoft YaHei",sans-serif';
-  ctx.fillStyle='#555';ctx.font=pt(11)+'px '+KT;ctx.textBaseline='alphabetic';
-  ctx.textAlign='left';ctx.fillText('汉字笔顺练习',10*MM,15.5*MM);
-  ctx.textAlign='right';ctx.fillText('姓名：________　日期：________',200*MM,15.5*MM);
-  ctx.textAlign='left';
-  const bh=269/per;
-  items.forEach((c,i)=>{
-    const s=DB[c].s,n=s.length,y0=18+i*bh,w=Math.min(13,Math.floor(1820/(n+1))/10);
-    dHead(ctx,c,n,y0,KT);
-    dCell(ctx,10,y0+9,w,s,0,'full');
-    for(let k=1;k<=n;k++)dCell(ctx,10+k*(w-.35),y0+9,w,s,k,'step');
-    for(let k=0;k<11;k++)dCell(ctx,10+k*16.65,y0+9+w+3,17,s,0,k<gh?'ghost':'none');
+  const X0=PAGE.PAD_X,X1=PAGE.PAD_X+PAGE.CONTENT_W;
+  dTopBar(ctx,X0,X1,KT);
+  const lay=layoutSheet(items,per);
+  lay.blocks.forEach(b=>{
+    dHead(ctx,b.c,b.n,b.y,b.headH,KT);
+    const stepPitch=b.w-PAGE.BORDER;
+    dCell(ctx,X0,b.stepsY,b.w,b.s,0,'full');
+    for(let k=1;k<b.row1;k++)dCell(ctx,X0+k*stepPitch,b.stepsY,b.w,b.s,k,'step');
+    if(b.wrapped){
+      const y2=b.stepsY+stepPitch;
+      for(let k=b.row1;k<=b.n;k++)dCell(ctx,X0+(k-b.row1)*stepPitch,y2,b.w,b.s,k,'step');
+    }
+    for(let k=0;k<PAGE.COLS;k++)dCell(ctx,X0+k*(PAGE.CELL-PAGE.BORDER),b.pracY,PAGE.CELL,b.s,0,k<gh?'ghost':'none');
+  });
+  lay.blankYs.forEach(by=>{
+    for(let k=0;k<PAGE.COLS;k++)dCell(ctx,X0+k*(PAGE.CELL-PAGE.BORDER),by,PAGE.CELL,[],0,'none');
   });
   return cv;
 }
@@ -425,13 +672,23 @@ function makePdf(imgs){
   push('trailer\n<</Size '+total+'/Root 1 0 R>>\nstartxref\n'+xr+'\n%%EOF');
   return new Blob(parts,{type:'application/pdf'});
 }
+function syncFromInput(){
+  const key=chars().join('');
+  if(key!==lastCharKey){lastCharKey=key;buildPoly();}
+  render();
+}
+function flushInput(){
+  if(inpTimer){clearTimeout(inpTimer);inpTimer=null;syncFromInput();}
+}
 function busy(b){$('bprint').disabled=b;$('bpdf').disabled=b;$('bmd').disabled=b;}
 function doPrint(){
+  flushInput();
   const {ok}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
   fitHeads();
   window.print();
 }
 async function exportPdf(){
+  flushInput();
   const {ok,per,gh}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
   busy(true);$('msg').textContent='正在生成 PDF…';
   try{
@@ -449,6 +706,7 @@ async function exportPdf(){
 }
 function escMd(s){return String(s).replace(/\|/g,'\\|');}
 function buildMd(){
+  flushInput();
   const {ok}=cur();
   let m='# 生字练习表\n\n生字：'+ok.map(c=>{
     const pys=activeEntries(c).map(e=>e.p).join(' / ');
@@ -461,16 +719,25 @@ function buildMd(){
     const wdCol=escMd(entries.filter(e=>e.w.length).map(e=>(showPrefix?e.p+'：':'')+e.w.join('、')).join('；'));
     m+='| '+(i+1)+' | '+c+' | '+pyCol+' | '+wdCol+' | '+DB[c].s.length+' |\n';
   });
-  m+='\n生成日期：'+today()+'\n';
+  const dt=selectedDateInfo();
+  m+='\n生成日期：'+(dt.blank?localDateParts().label:dt.label)+'\n';
   return m;
 }
 async function exportMd(){
+  flushInput();
   const {ok}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
   await saveFile('汉字练习_'+today()+'.md',new Blob([buildMd()],{type:'text/markdown'}));
 }
 addEventListener('resize',()=>{fitHeads();fit();});
-$('inp').oninput=()=>{buildPoly();render();};
+addEventListener('afterprint',fit);
+$('inp').oninput=()=>{if(inpTimer)clearTimeout(inpTimer);inpTimer=setTimeout(()=>{inpTimer=null;syncFromInput();},150);};
 $('per').onchange=render;$('ghost').onchange=render;
+$('dt').onchange=()=>{if($('dt').value)$('dtBlank').checked=false;else $('dtBlank').checked=true;render();};
+$('dtBlank').onchange=()=>{
+  if(!$('dtBlank').checked&&!$('dt').value)$('dt').value=localDateParts().ymd;
+  $('dt').disabled=$('dtBlank').checked;
+  render();
+};
 setTimeout(()=>{if(!DB&&!$('msg').textContent.includes('失败'))$('msg').textContent='字库 20 秒还没加载出来：请刷新重试，或换 Safari / Chrome 打开链接。';},20000);
 (async()=>{
   try{
@@ -478,9 +745,10 @@ setTimeout(()=>{if(!DB&&!$('msg').textContent.includes('失败'))$('msg').textCo
     DB=await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).json();
   }catch(e){$('msg').textContent='字库加载失败，请换用较新的浏览器（Safari 16.4+ / Chrome）。';return;}
   loadCfg();
+  $('dt').value=localDateParts().ymd;
   let v='树桥数欢园种活极洗点';
   try{v=localStorage.getItem('hz_in')||v;}catch(e){}
   $('inp').value=v;$('msg').textContent='';
-  buildPoly();render();
+  syncFromInput();
 })();
 </script></body></html>

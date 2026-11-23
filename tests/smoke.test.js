@@ -15,8 +15,11 @@ const errors = [];
 const vc = new VirtualConsole();
 vc.on('jsdomError', (e) => errors.push(e.message));
 
+const srcHtml = fs.readFileSync(file, 'utf8');
+assert.ok(!srcHtml.includes('window.claude'), '产物不应包含遗留的 window.claude 死代码');
+
 // jsdom 没有 DecompressionStream / Blob.stream，这里用 Node 的 zlib 代替
-const dom = new JSDOM(fs.readFileSync(file, 'utf8'), {
+const dom = new JSDOM(srcHtml, {
   runScripts: 'dangerously',
   pretendToBeVisual: true,
   virtualConsole: vc,
@@ -27,13 +30,58 @@ const dom = new JSDOM(fs.readFileSync(file, 'utf8'), {
   },
 });
 
-setTimeout(() => {
-  const w = dom.window, d = w.document;
+// 轮询等待 DB 解压完成（去除固定 6 秒硬等待，超时上限 15 秒）
+const deadline = Date.now() + 15000;
+const poll = setInterval(() => {
+  const w = dom.window;
+  if (!w.eval('DB')) {
+    if (Date.now() > deadline) {
+      clearInterval(poll);
+      console.error('冒烟测试失败：字库加载超时（>15s）');
+      process.exit(1);
+    }
+    return;
+  }
+  clearInterval(poll);
+  runTests(w, w.document);
+}, 50);
+
+function runTests(w, d) {
   try {
+    const setInp = (val) => {
+      const inp = d.getElementById('inp');
+      inp.value = val;
+      inp.dispatchEvent(new w.Event('input'));
+      w.flushInput();
+    };
     assert.deepStrictEqual(errors, [], '页面有脚本错误：' + errors.join(' | '));
     assert.strictEqual(d.getElementById('msg').textContent, '', '字库未加载成功');
     assert.strictEqual(d.querySelectorAll('.sheet').length, 2, '默认 10 个字、每页 6 个，应有 2 页');
     assert.ok(d.querySelectorAll('#poly .pcard').length >= 2, '应出现多音字卡片（数、种等）');
+
+    // 0. 日期年月日+星期、手填切换与下划线结构检查
+    const dtValEl = d.querySelector('.sheet .top-r .dt-val');
+    assert.ok(dtValEl && /^\d{4}年\d{1,2}月\d{1,2}日（[日一二三四五六]）$/.test(dtValEl.textContent), '默认页眉应自动填写年月日及星期：' + (dtValEl && dtValEl.textContent));
+    const dtInput = d.getElementById('dt');
+    dtInput.value = '2026-11-24';
+    dtInput.dispatchEvent(new w.Event('change'));
+    assert.strictEqual(d.querySelector('.sheet .top-r .dt-val').textContent, '2026年11月24日（二）', '切换日期选择器应同步更新年月日与星期');
+    const dtBlank = d.getElementById('dtBlank');
+    dtBlank.checked = true;
+    dtBlank.dispatchEvent(new w.Event('change'));
+    const topRText = d.querySelector('.sheet .top-r').textContent;
+    assert.ok(topRText.includes('年') && topRText.includes('月') && topRText.includes('日（') && !d.querySelector('.sheet .top-r .dt-val'), '勾选手填后应保留年月日及星期空白下划线格式：' + topRText);
+    assert.strictEqual(d.querySelectorAll('.sheet:first-child .top-r .u').length, 5, '手填模式应包含姓名+年月日星期共 5 条对齐下划线');
+    dtBlank.checked = false;
+    dtBlank.dispatchEvent(new w.Event('change'));
+
+    // 0b. 空白田字格克制数量（6 - 当页字数，上限 5 行）与拼音书写间距检查
+    const sheets = [...d.querySelectorAll('.sheet')];
+    assert.strictEqual(sheets[0].querySelectorAll('.blank-row').length, 0, '满页 6 字不应追加空白田字格');
+    assert.strictEqual(sheets[1].querySelectorAll('.blank-row').length, 2, '未满末页 4 字应追加 2 行空白田字格（6 - 4 = 2）');
+    const p2BlankArea = sheets[1].querySelector('.blank-area');
+    assert.ok(parseFloat(p2BlankArea.style.marginTop) >= 11, '空白区上方应保留足够拼音书写空间（≥11mm）');
+    assert.ok(parseFloat(sheets[1].querySelector('.blank-row').style.marginBottom) >= 10, '空白行间距应保留足够拼音书写空间（≥10mm）');
 
     // 1. 扩容字库规模、相对路径压缩、组词覆盖率与少儿敏感词安全检查
     const db = w.eval('DB');
@@ -92,11 +140,17 @@ setTimeout(() => {
     assert.ok(!headOf('种').includes('chóng'), '「种」冷僻读音 chóng 默认不应显示');
     assert.ok(headOf('数').includes('shù') && headOf('数').includes('shǔ') && !headOf('数').includes('shuò'), '「数」应默认显示 shù/shǔ 且隐藏冷僻音 shuò：' + headOf('数'));
 
-    // 4. 取消勾选后，对应读音立即从预览消失
+    // 4. 取消勾选后，对应读音立即从预览消失；但禁止取消最后一个读音，且局部更新不重建无关卡片
+    const shuCardBefore = d.querySelector('#poly .pcard[data-char="数"]');
     const zhongCb = d.querySelector('#poly .pcard[data-char="种"] .ptag[data-py="zhòng"] input');
     assert.ok(zhongCb && zhongCb.checked, '「种」的 zhòng 初始应勾选');
     zhongCb.click();
     assert.ok(!headOf('种').includes('zhòng') && headOf('种').includes('zhǒng'), '取消勾选 zhòng 后应立即从预览消失：' + headOf('种'));
+    assert.strictEqual(d.querySelector('#poly .pcard[data-char="数"]'), shuCardBefore, '局部更新「种」不应销毁重建无关的「数」卡片');
+    const zhongLastCb = d.querySelector('#poly .pcard[data-char="种"] .ptag[data-py="zhǒng"] input');
+    zhongLastCb.click();
+    assert.ok(headOf('种').includes('zhǒng'), '不能取消多音字最后一个已勾选读音：' + headOf('种'));
+    assert.ok(d.getElementById('msg').textContent.includes('至少保留一个读音'), '尝试取消最后一个读音应提示用户');
 
     // 5. 勾选冷僻读音后仅显示拼音，且支持手动添加/删除组词
     const shuoCb = d.querySelector('#poly .pcard[data-char="数"] .ptag[data-py="shuò"] input');
@@ -109,14 +163,20 @@ setTimeout(() => {
     w.delWord('种', 'zhǒng', firstZhongWord);
     assert.ok(!headOf('种').includes(firstZhongWord), '手动删除推荐组词后应从标题行消失');
 
-    // 6. 普通汉字组词示例与增删测试（动态读取词表，不硬编码具体词）
+    // 6. 普通汉字组词增删与单音字轻量改音测试（动态读取词表，不硬编码具体词）
     const treePy = db['树'].p[0];
     const treeDefWords = db['树'].w[treePy];
     assert.ok(treeDefWords.length >= 2, '「树」应有至少 2 个推荐组词');
     assert.ok(headOf('树').includes(treePy) && headOf('树').includes(treeDefWords[0]), '普通字「树」标题行应显示拼音和组词示例：' + headOf('树'));
     assert.ok(d.querySelectorAll('#singles .srow').length >= 7, '普通汉字组词设置区应列出非多音字');
+    const bridgeRowBefore = d.querySelector('#singles .srow[data-char="桥"]');
     w.addWords('树', treePy, '树干');
     assert.ok(headOf('树').includes('树干'), '普通字手动添加组词后应显示在标题行');
+    assert.strictEqual(d.querySelector('#singles .srow[data-char="桥"]'), bridgeRowBefore, '局部更新普通字「树」不应重建无关的「桥」行');
+    w.setSinglePy('桥', 'qiáo2');
+    assert.ok(headOf('桥').includes('qiáo2') && headOf('桥').includes(db['桥'].w[db['桥'].p[0]][0]), '单音字改音后应显示新拼音并保留原有组词：' + headOf('桥'));
+    w.setSinglePy('桥', '');
+    assert.ok(headOf('桥').includes('qiáo') && !headOf('桥').includes('qiáo2'), '单音字清空自定义拼音后应恢复默认读音');
     w.delWord('树', treePy, treeDefWords[0]);
     assert.ok(!headOf('树').includes(treeDefWords[0]), '普通字手动删除组词后应从标题行消失');
 
@@ -127,14 +187,13 @@ setTimeout(() => {
     const md = w.buildMd();
     assert.ok(md.includes('| 序号 | 汉字 | 拼音 | 例词 | 笔画数 |'), 'Markdown 表头应包含例词列');
     assert.ok(md.includes('测试组词') && md.includes('zhǒng / zhòng2'), 'Markdown 应包含所有保留读音和例词');
+    assert.ok(/生成日期：\d{4}年\d{1,2}月\d{1,2}日（[日一二三四五六]）/.test(md), 'Markdown 应使用年月日+星期格式');
     const expectedTreeMd = [...treeDefWords.slice(1), '树干'].join('、');
     assert.ok(md.includes(`| 1 | 树 | ${treePy} | ${expectedTreeMd} |`), 'Markdown 应导出普通字的组词例词：' + md);
 
     // 8. 换一批不在手写词表的生字：非多音字自动出词 + 未收录多音字收敛冷僻音
-    const inp = d.getElementById('inp');
     const newOrdinary = ['蝉', '棉', '骑', '桂', '菊', '稻', '梁', '蚁', '莲', '舅', '饿', '渴', '缸', '碗', '盆', '锅'];
-    inp.value = newOrdinary.join('') + '燕蚂姥少';
-    inp.dispatchEvent(new w.Event('input'));
+    setInp(newOrdinary.join('') + '燕蚂姥少');
     for (const c of newOrdinary) {
       const wdEl = d.querySelector(`[data-char="${c}"] .head .wd`);
       assert.ok(wdEl && wdEl.textContent.trim().length > 0, `非手写词表的普通字「${c}」应自动生成推荐组词`);
@@ -147,13 +206,33 @@ setTimeout(() => {
     assert.ok(md2.includes('| 1 | 蝉 | chán |') && !md2.includes('| 1 | 蝉 | chán |  |'), '新批次普通字 Markdown 应包含推荐例词');
 
     // 9. 扩容字渲染 + 极少数无推荐词的字：显示空提示并自动展开普通汉字设置区
-    inp.value = '蜻蜓蚯蚓蝌蚪喆垚捌';
-    inp.dispatchEvent(new w.Event('input'));
+    setInp('蜻蜓蚯蚓蝌蚪喆垚捌');
     assert.strictEqual(d.getElementById('msg').textContent, '', '扩容字（蜻蜓蚯蚓蝌蚪喆垚）不应报暂无数据');
     assert.ok(d.querySelector('[data-char="蜻"] .head .wd').textContent.includes('蜻蜓'), '「蜻」应自动显示组词');
     const sboxDet = d.querySelector('#singles details');
     assert.ok(sboxDet && sboxDet.open, '输入无推荐组词的普通字时应自动展开普通汉字设置区');
     assert.ok(d.querySelector('#singles .wempty').textContent.includes('暂无推荐组词'), '无推荐组词时应显示提示文案');
+
+    // 9b. 高笔画字自动折行（≥15画）与 1 字/4 字空白田字格上限与不溢出检查
+    setInp('露霸罐矗藏警');
+    const highBlocks = [...d.querySelectorAll('[data-wrapped="1"]')];
+    assert.strictEqual(highBlocks.length, 6, '6 个 ≥15 画字均应触发两行笔顺折行');
+    assert.strictEqual(d.querySelectorAll('.steps-r2').length, 6, '每个折行字均应渲染第二行笔顺格');
+    const lay6High = w.layoutSheet([...'露霸罐矗藏警'], 6);
+    const lastHigh = lay6High.blocks[lay6High.blocks.length - 1];
+    assert.ok(lastHigh.y + lastHigh.h <= 287.1, `6 个高笔画字总高度不应溢出 A4 内容底边：${lastHigh.y + lastHigh.h}`);
+    assert.ok(lay6High.blocks.every((b) => b.w >= 8.5), '6 个高笔画字折行后笔顺格宽应 ≥ 8.5mm');
+    setInp('树');
+    assert.strictEqual(d.querySelectorAll('.sheet .blank-row').length, 5, '1 字页下方应填 5 行空白田字格（硬上限 5 行）');
+    const perSel = d.getElementById('per');
+    perSel.value = '4';
+    perSel.dispatchEvent(new w.Event('change'));
+    setInp('树桥欢园');
+    assert.strictEqual(d.querySelectorAll('.sheet .blank-row').length, 2, '每页 4 字下方应填 2 行空白田字格');
+    perSel.value = '5';
+    perSel.dispatchEvent(new w.Event('change'));
+    setInp('树桥欢园活');
+    assert.strictEqual(d.querySelectorAll('.sheet .blank-row').length, 0, '每页 5 字满页不应追加空白田字格');
 
     // 10. 一键打印按钮顺序、配色，以及 PDF 生成器与校验脚本测试
     const btns = [...d.querySelectorAll('.opts button')].map((b) => b.id);
@@ -171,10 +250,10 @@ setTimeout(() => {
     const badCheck = checkPolyphones({ 种: { zhòng: ['种子'] } });
     assert.ok(badCheck.warnings.length >= 1, '校验脚本应能报出故意写错读音的例词');
 
-    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），扩容字渲染、敏感词过滤、冷僻音收敛、校验白名单、一键打印、Markdown 与 PDF 均正常`);
+    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），排版折行、空白巩固区、日期下划线/手填、单音字改音、防空勾、局部保焦点、一键打印、Markdown 与 PDF 均正常`);
     process.exit(0);
   } catch (e) {
     console.error('冒烟测试失败：' + e.message);
     process.exit(1);
   }
-}, 6000);
+}
