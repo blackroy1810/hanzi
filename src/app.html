@@ -557,133 +557,269 @@ async function saveFile(name,blob){
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);return true;
 }
 function cur(){return {ok:chars().filter(c=>DB&&DB[c]),per:+$('per').value,gh:+$('ghost').value};}
-const MM=250/25.4;
-const pt=p=>p*0.3528*MM;
-function dCell(ctx,x,y,mm,s,upto,mode){
-  const lw=.35*MM,W=mm*MM;
-  ctx.save();
-  ctx.translate(x*MM+lw,y*MM+lw);ctx.scale((W-2*lw)/1024,(W-2*lw)/1024);
-  ctx.strokeStyle='#dc9a92';ctx.lineWidth=18;ctx.setLineDash([26,22]);
-  [[512,0,512,1024],[0,512,1024,512]].forEach(l=>{ctx.beginPath();ctx.moveTo(l[0],l[1]);ctx.lineTo(l[2],l[3]);ctx.stroke();});
-  ctx.setLineDash([]);ctx.translate(0,900);ctx.scale(1,-1);
-  s.forEach((d,i)=>{let f=null;
-    if(mode==='full')f='#222';else if(mode==='ghost')f='#d6d6d6';
-    else if(mode==='step')f=i<upto-1?'#c8c8c8':(i===upto-1?'#000':null);
-    if(f){ctx.fillStyle=f;ctx.fill(new Path2D(d));}});
-  ctx.restore();
-  ctx.strokeStyle='#444';ctx.lineWidth=lw;ctx.setLineDash([]);
-  ctx.strokeRect(x*MM+lw/2,y*MM+lw/2,W-lw,W-lw);
+const PDF_PT=72/25.4;
+const STRIP_DPI=300;
+const STRIP_MM=STRIP_DPI/25.4;
+const HEAD_PAD_TOP=1.0;
+const KT_FONT='"Kaiti SC","KaiTi","PingFang SC","Microsoft YaHei",sans-serif';
+const stripPt=p=>p*0.3528*STRIP_MM;
+function pNum(n){const r=Math.round(n*100)/100;return r===0?'0':String(r);}
+function pScale(n){const r=Math.round(n*100000)/100000;return r===0?'0':String(r);}
+function svgPathToPdf(d){
+  const tok=String(d||'').match(/[MmLlHhVvQqCcZz]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g);
+  if(!tok)return '';
+  const out=[];
+  let i=0,cmd='',cx=0,cy=0,sx=0,sy=0;
+  const num=()=>parseFloat(tok[i++]);
+  const isCmd=t=>/^[MmLlHhVvQqCcZz]$/.test(t);
+  while(i<tok.length){
+    if(isCmd(tok[i]))cmd=tok[i++];
+    else if(!cmd)break;
+    if(cmd==='M'||cmd==='m'){
+      const rel=cmd==='m';
+      const x=num()+(rel?cx:0),y=num()+(rel?cy:0);
+      out.push(pNum(x)+' '+pNum(y)+' m');
+      cx=sx=x;cy=sy=y;
+      cmd=rel?'l':'L';
+    }else if(cmd==='L'||cmd==='l'){
+      const rel=cmd==='l';
+      const x=num()+(rel?cx:0),y=num()+(rel?cy:0);
+      out.push(pNum(x)+' '+pNum(y)+' l');
+      cx=x;cy=y;
+    }else if(cmd==='H'||cmd==='h'){
+      const x=num()+(cmd==='h'?cx:0);
+      out.push(pNum(x)+' '+pNum(cy)+' l');
+      cx=x;
+    }else if(cmd==='V'||cmd==='v'){
+      const y=num()+(cmd==='v'?cy:0);
+      out.push(pNum(cx)+' '+pNum(y)+' l');
+      cy=y;
+    }else if(cmd==='Q'||cmd==='q'){
+      const rel=cmd==='q';
+      const qx=num()+(rel?cx:0),qy=num()+(rel?cy:0);
+      const x=num()+(rel?cx:0),y=num()+(rel?cy:0);
+      const c1x=cx+(2/3)*(qx-cx),c1y=cy+(2/3)*(qy-cy);
+      const c2x=x+(2/3)*(qx-x),c2y=y+(2/3)*(qy-y);
+      out.push(pNum(c1x)+' '+pNum(c1y)+' '+pNum(c2x)+' '+pNum(c2y)+' '+pNum(x)+' '+pNum(y)+' c');
+      cx=x;cy=y;
+    }else if(cmd==='C'||cmd==='c'){
+      const rel=cmd==='c';
+      const x1=num()+(rel?cx:0),y1=num()+(rel?cy:0);
+      const x2=num()+(rel?cx:0),y2=num()+(rel?cy:0);
+      const x=num()+(rel?cx:0),y=num()+(rel?cy:0);
+      out.push(pNum(x1)+' '+pNum(y1)+' '+pNum(x2)+' '+pNum(y2)+' '+pNum(x)+' '+pNum(y)+' c');
+      cx=x;cy=y;
+    }else if(cmd==='Z'||cmd==='z'){
+      out.push('h');
+      cx=sx;cy=sy;
+      cmd='';
+    }else{
+      break;
+    }
+  }
+  return out.join(' ');
 }
-function measureHeadEntries(ctx,entries,pyBase,sc,KT){
+function pdfCellOps(xMm,yMm,mm,strokePaths,upto,mode){
+  const lw=PAGE.BORDER,inner=mm-2*lw;
+  const ix=(xMm+lw)*PDF_PT,iy=(PAGE.H-(yMm+mm-lw))*PDF_PT,iw=inner*PDF_PT;
+  const s=iw/1024,mx=ix+iw/2,my=iy+iw/2;
+  const ops=[
+    'q',
+    pNum(ix)+' '+pNum(iy)+' '+pNum(iw)+' '+pNum(iw)+' re W n',
+    '0.863 0.604 0.573 RG '+pNum(18*s)+' w ['+pNum(26*s)+' '+pNum(22*s)+'] 0 d',
+    pNum(mx)+' '+pNum(iy+iw)+' m '+pNum(mx)+' '+pNum(iy)+' l S',
+    pNum(ix)+' '+pNum(my)+' m '+pNum(ix+iw)+' '+pNum(my)+' l S'
+  ];
+  if(mode!=='none'&&strokePaths&&strokePaths.length){
+    ops.push(pScale(s)+' 0 0 '+pScale(s)+' '+pNum(ix)+' '+pNum(iy+124*s)+' cm');
+    if(mode==='full'||mode==='ghost'){
+      ops.push(mode==='full'?'0.133 g':'0.839 g');
+      for(let i=0;i<strokePaths.length;i++)if(strokePaths[i])ops.push(strokePaths[i]+' f');
+    }else if(mode==='step'){
+      if(upto>1){
+        ops.push('0.784 g');
+        const lim=Math.min(upto-1,strokePaths.length);
+        for(let i=0;i<lim;i++)if(strokePaths[i])ops.push(strokePaths[i]+' f');
+      }
+      if(upto>=1&&upto<=strokePaths.length&&strokePaths[upto-1]){
+        ops.push('0 g');
+        ops.push(strokePaths[upto-1]+' f');
+      }
+    }
+  }
+  ops.push('Q');
+  const bx=(xMm+lw/2)*PDF_PT,by=(PAGE.H-(yMm+mm-lw/2))*PDF_PT,bw=(mm-lw)*PDF_PT;
+  ops.push(pNum(bx)+' '+pNum(by)+' '+pNum(bw)+' '+pNum(bw)+' re S');
+  return ops.join('\n');
+}
+function pdfPlaceImg(name,xMm,yMm,wMm,hMm){
+  const tx=xMm*PDF_PT,ty=(PAGE.H-(yMm+hMm))*PDF_PT;
+  return 'q '+pNum(wMm*PDF_PT)+' 0 0 '+pNum(hMm*PDF_PT)+' '+pNum(tx)+' '+pNum(ty)+' cm /'+name+' Do Q';
+}
+function buildPageStream(lay,gh,strokeCache,headNames,topName){
+  const ops=[];
+  if(topName)ops.push(pdfPlaceImg(topName,PAGE.PAD_X,PAGE.PAD_Y,PAGE.CONTENT_W,PAGE.TOP_H));
+  lay.blocks.forEach((b,idx)=>{
+    const hn=headNames&&headNames[idx];
+    if(hn)ops.push(pdfPlaceImg(hn,PAGE.PAD_X,b.y-HEAD_PAD_TOP,PAGE.CONTENT_W,b.headH+HEAD_PAD_TOP));
+  });
+  ops.push('0.267 G '+pNum(PAGE.BORDER*PDF_PT)+' w [] 0 d');
+  const X0=PAGE.PAD_X,pracPitch=PAGE.CELL-PAGE.BORDER;
+  lay.blocks.forEach(b=>{
+    let sp=strokeCache.get(b.c);
+    if(!sp){sp=b.s.map(svgPathToPdf);strokeCache.set(b.c,sp);}
+    const stepPitch=b.w-PAGE.BORDER;
+    ops.push(pdfCellOps(X0,b.stepsY,b.w,sp,0,'full'));
+    for(let k=1;k<b.row1;k++)ops.push(pdfCellOps(X0+k*stepPitch,b.stepsY,b.w,sp,k,'step'));
+    if(b.wrapped){
+      const y2=b.stepsY+stepPitch;
+      for(let k=b.row1;k<=b.n;k++)ops.push(pdfCellOps(X0+(k-b.row1)*stepPitch,y2,b.w,sp,k,'step'));
+    }
+    for(let k=0;k<PAGE.COLS;k++)ops.push(pdfCellOps(X0+k*pracPitch,b.pracY,PAGE.CELL,sp,0,k<gh?'ghost':'none'));
+  });
+  lay.blankYs.forEach(by=>{
+    for(let k=0;k<PAGE.COLS;k++)ops.push(pdfCellOps(X0+k*pracPitch,by,PAGE.CELL,[],0,'none'));
+  });
+  return ops.join('\n');
+}
+function measureHeadEntries(ctx,entries,pyBase,sc){
   let total=0;
   entries.forEach((e,idx)=>{
-    ctx.font=pt(pyBase*sc)+'px Arial,"PingFang SC",sans-serif';
+    ctx.font=stripPt(pyBase*sc)+'px Arial,"PingFang SC",sans-serif';
     total+=ctx.measureText(e.p).width;
     if(e.w.length){
-      ctx.font=pt(13.5*sc)+'px '+KT;
-      total+=1.8*sc*MM+ctx.measureText(e.w.join(' ')).width;
+      ctx.font=stripPt(13.5*sc)+'px '+KT_FONT;
+      total+=1.8*sc*STRIP_MM+ctx.measureText(e.w.join(' ')).width;
     }
-    if(idx<entries.length-1)total+=4.5*sc*MM;
+    if(idx<entries.length-1)total+=4.5*sc*STRIP_MM;
   });
   return total;
 }
-function dHead(ctx,c,n,y0,headH,KT){
-  const X0=PAGE.PAD_X,X1=PAGE.PAD_X+PAGE.CONTENT_W;
-  const y=(y0+headH-2.2)*MM;
-  const meta=c+' · '+n+' 画';
-  ctx.fillStyle='#888';ctx.font=pt(9)+'px '+KT;ctx.textAlign='right';
-  const metaW=ctx.measureText(meta).width;
-  ctx.fillText(meta,X1*MM,y);
-  ctx.textAlign='left';
-  const entries=activeEntries(c);
-  if(!entries.length)return;
-  const multi=isPoly(c)||entries.some(e=>e.w.length>0);
-  const pyBase=multi?15.5:17;
-  const availW=PAGE.CONTENT_W*MM-metaW-4*MM;
-  let sc=1;
-  const rawW=measureHeadEntries(ctx,entries,pyBase,1,KT);
-  if(rawW>availW&&availW>0){
-    sc=Math.max(0.45,availW/rawW);
-    const checkW=measureHeadEntries(ctx,entries,pyBase,sc,KT);
-    if(checkW>availW)sc=Math.max(0.4,sc*(availW/checkW));
+async function deflateBytes(u8){
+  if(typeof CompressionStream==='undefined'){
+    throw new Error('当前浏览器不支持原生 PDF 压缩，请换用 Safari 16.4+ / Chrome / Edge');
   }
-  let x=X0*MM;
-  entries.forEach((e,idx)=>{
-    ctx.fillStyle='#c0392b';ctx.font=pt(pyBase*sc)+'px Arial,"PingFang SC",sans-serif';
-    ctx.fillText(e.p,x,y);
-    x+=ctx.measureText(e.p).width;
-    if(e.w.length){
-      const ws=e.w.join(' ');
-      x+=1.8*sc*MM;
-      ctx.fillStyle='#333';ctx.font=pt(13.5*sc)+'px '+KT;
-      ctx.fillText(ws,x,y);
-      x+=ctx.measureText(ws).width;
-    }
-    if(idx<entries.length-1)x+=4.5*sc*MM;
-  });
+  const ab=await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer();
+  return new Uint8Array(ab);
 }
-function dTopBar(ctx,X0,X1,KT){
-  const y=15.5*MM,ly=y+0.8*MM;
-  ctx.fillStyle='#555';ctx.strokeStyle='#555';ctx.lineWidth=.3*MM;ctx.setLineDash([]);
-  ctx.font=pt(11)+'px '+KT;ctx.textBaseline='alphabetic';ctx.textAlign='left';
-  ctx.fillText('汉字笔顺练习',X0*MM,y);
-  const dt=selectedDateInfo();
+async function canvasToFlateImage(cv,gray){
+  const w=cv.width,h=cv.height;
+  const rgba=cv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+  const raw=new Uint8Array(w*h*(gray?1:3));
+  if(gray){
+    for(let i=0,j=0;i<rgba.length;i+=4,j++)raw[j]=Math.round(0.299*rgba[i]+0.587*rgba[i+1]+0.114*rgba[i+2]);
+  }else{
+    for(let i=0,j=0;i<rgba.length;i+=4,j+=3){raw[j]=rgba[i];raw[j+1]=rgba[i+1];raw[j+2]=rgba[i+2];}
+  }
+  return {w,h,gray:Boolean(gray),data:await deflateBytes(raw)};
+}
+async function renderTopStrip(cv,dt){
+  const w=Math.max(1,Math.round(PAGE.CONTENT_W*STRIP_MM));
+  const h=Math.max(1,Math.round(PAGE.TOP_H*STRIP_MM));
+  cv.width=w;cv.height=h;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+  const y=(15.5-PAGE.PAD_Y)*STRIP_MM,ly=y+0.8*STRIP_MM;
+  ctx.fillStyle='#555';ctx.strokeStyle='#555';ctx.lineWidth=.3*STRIP_MM;ctx.setLineDash([]);
+  ctx.font=stripPt(11)+'px '+KT_FONT;ctx.textBaseline='alphabetic';ctx.textAlign='left';
+  ctx.fillText('汉字笔顺练习',0,y);
   const segs=dt.blank
     ?[{t:'姓名：'},{l:22},{t:'　日期：'},{l:11},{t:'年'},{l:6.5},{t:'月'},{l:6.5},{t:'日（'},{l:5.5},{t:'）'}]
     :[{t:'姓名：'},{l:22},{t:'　日期：'},{ul:dt.label,pad:1.2}];
-  const segW=s=>s.t?ctx.measureText(s.t).width:(s.l?s.l*MM:(ctx.measureText(s.ul).width+2*s.pad*MM));
-  let x=X1*MM-segs.reduce((a,s)=>a+segW(s),0);
+  const segW=s=>s.t?ctx.measureText(s.t).width:(s.l?s.l*STRIP_MM:(ctx.measureText(s.ul).width+2*s.pad*STRIP_MM));
+  let x=w-segs.reduce((a,s)=>a+segW(s),0);
   segs.forEach(s=>{
-    const w=segW(s);
+    const sw=segW(s);
     if(s.t){ctx.fillText(s.t,x,y);}
-    else if(s.l){ctx.beginPath();ctx.moveTo(x,ly);ctx.lineTo(x+w,ly);ctx.stroke();}
+    else if(s.l){ctx.beginPath();ctx.moveTo(x,ly);ctx.lineTo(x+sw,ly);ctx.stroke();}
     else if(s.ul){
-      ctx.fillText(s.ul,x+s.pad*MM,y);
-      ctx.beginPath();ctx.moveTo(x,ly);ctx.lineTo(x+w,ly);ctx.stroke();
+      ctx.fillText(s.ul,x+s.pad*STRIP_MM,y);
+      ctx.beginPath();ctx.moveTo(x,ly);ctx.lineTo(x+sw,ly);ctx.stroke();
     }
-    x+=w;
+    x+=sw;
   });
+  return canvasToFlateImage(cv,true);
 }
-function dSheet(items,per,gh){
-  const cv=document.createElement('canvas');cv.width=Math.round(PAGE.W*MM);cv.height=Math.round(PAGE.H*MM);
-  const ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
-  const KT='"Kaiti SC","KaiTi","PingFang SC","Microsoft YaHei",sans-serif';
-  const X0=PAGE.PAD_X,X1=PAGE.PAD_X+PAGE.CONTENT_W;
-  dTopBar(ctx,X0,X1,KT);
-  const lay=layoutSheet(items,per);
-  lay.blocks.forEach(b=>{
-    dHead(ctx,b.c,b.n,b.y,b.headH,KT);
-    const stepPitch=b.w-PAGE.BORDER;
-    dCell(ctx,X0,b.stepsY,b.w,b.s,0,'full');
-    for(let k=1;k<b.row1;k++)dCell(ctx,X0+k*stepPitch,b.stepsY,b.w,b.s,k,'step');
-    if(b.wrapped){
-      const y2=b.stepsY+stepPitch;
-      for(let k=b.row1;k<=b.n;k++)dCell(ctx,X0+(k-b.row1)*stepPitch,y2,b.w,b.s,k,'step');
+async function renderHeadStrip(cv,c,n,headH){
+  const w=Math.max(1,Math.round(PAGE.CONTENT_W*STRIP_MM));
+  const h=Math.max(1,Math.round((headH+HEAD_PAD_TOP)*STRIP_MM));
+  cv.width=w;cv.height=h;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+  const y=(HEAD_PAD_TOP+headH-2.2)*STRIP_MM;
+  const meta=c+' · '+n+' 画';
+  ctx.textBaseline='alphabetic';
+  ctx.fillStyle='#888';ctx.font=stripPt(9)+'px '+KT_FONT;ctx.textAlign='right';
+  const metaW=ctx.measureText(meta).width;
+  ctx.fillText(meta,w,y);
+  ctx.textAlign='left';
+  const entries=activeEntries(c);
+  if(entries.length){
+    const multi=isPoly(c)||entries.some(e=>e.w.length>0);
+    const pyBase=multi?15.5:17;
+    const availW=w-metaW-4*STRIP_MM;
+    let sc=1;
+    const rawW=measureHeadEntries(ctx,entries,pyBase,1);
+    if(rawW>availW&&availW>0){
+      sc=Math.max(0.45,availW/rawW);
+      const checkW=measureHeadEntries(ctx,entries,pyBase,sc);
+      if(checkW>availW)sc=Math.max(0.4,sc*(availW/checkW));
     }
-    for(let k=0;k<PAGE.COLS;k++)dCell(ctx,X0+k*(PAGE.CELL-PAGE.BORDER),b.pracY,PAGE.CELL,b.s,0,k<gh?'ghost':'none');
-  });
-  lay.blankYs.forEach(by=>{
-    for(let k=0;k<PAGE.COLS;k++)dCell(ctx,X0+k*(PAGE.CELL-PAGE.BORDER),by,PAGE.CELL,[],0,'none');
-  });
-  return cv;
+    let x=0;
+    entries.forEach((e,idx)=>{
+      ctx.fillStyle='#c0392b';ctx.font=stripPt(pyBase*sc)+'px Arial,"PingFang SC",sans-serif';
+      ctx.fillText(e.p,x,y);
+      x+=ctx.measureText(e.p).width;
+      if(e.w.length){
+        const ws=e.w.join(' ');
+        x+=1.8*sc*STRIP_MM;
+        ctx.fillStyle='#333';ctx.font=stripPt(13.5*sc)+'px '+KT_FONT;
+        ctx.fillText(ws,x,y);
+        x+=ctx.measureText(ws).width;
+      }
+      if(idx<entries.length-1)x+=4.5*sc*STRIP_MM;
+    });
+  }
+  return canvasToFlateImage(cv,false);
 }
-function makePdf(imgs){
+function makePdf(pages,sharedImages){
   const enc=new TextEncoder(),parts=[],offs=[];let len=0;
   const push=b=>{const u=typeof b==='string'?enc.encode(b):b;parts.push(u);len+=u.length;};
   const obj=(n,body)=>{offs[n]=len;push(n+' 0 obj\n'+body+'\nendobj\n');};
+  const streamObj=(n,dict,data)=>{
+    offs[n]=len;
+    push(n+' 0 obj\n'+dict+'\nstream\n');
+    push(data);
+    push('\nendstream\nendobj\n');
+  };
+  const imgObj=(n,im)=>{
+    const cs=im.gray?'/DeviceGray':'/DeviceRGB';
+    streamObj(n,'<</Type/XObject/Subtype/Image/Width '+im.w+'/Height '+im.h+'/ColorSpace'+cs+'/BitsPerComponent 8/Filter/FlateDecode/Length '+im.data.length+'>>',im.data);
+  };
+  let nextId=3;
+  const sharedList=Object.entries(sharedImages||{}).map(([name,im])=>({name,im,id:nextId++}));
+  const pagePlans=pages.map(pg=>{
+    const pageId=nextId++;
+    const imgs=Object.entries(pg.images||{}).map(([name,im])=>({name,im,id:nextId++}));
+    const contentId=nextId++;
+    return {pageId,imgs,contentId,stream:pg.stream};
+  });
   push('%PDF-1.4\n');
+  push(new Uint8Array([0x25,0xe2,0xe3,0xcf,0xd3,0x0a]));
   obj(1,'<</Type/Catalog/Pages 2 0 R>>');
-  obj(2,'<</Type/Pages/Kids['+imgs.map((_,i)=>(3+3*i)+' 0 R').join(' ')+']/Count '+imgs.length+'>>');
-  imgs.forEach((im,i)=>{const p=3+3*i;
-    obj(p,'<</Type/Page/Parent 2 0 R/MediaBox[0 0 595.28 841.89]/Resources<</XObject<</Im0 '+(p+1)+' 0 R>>>>/Contents '+(p+2)+' 0 R>>');
-    offs[p+1]=len;push((p+1)+' 0 obj\n<</Type/XObject/Subtype/Image/Width '+im.w+'/Height '+im.h+'/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length '+im.data.length+'>>\nstream\n');
-    push(im.data);push('\nendstream\nendobj\n');
-    const c='q 595.28 0 0 841.89 0 0 cm /Im0 Do Q';
-    obj(p+2,'<</Length '+c.length+'>>\nstream\n'+c+'\nendstream');});
-  const xr=len,total=3+3*imgs.length;
+  obj(2,'<</Type/Pages/Kids['+pagePlans.map(p=>p.pageId+' 0 R').join(' ')+']/Count '+pagePlans.length+'>>');
+  sharedList.forEach(s=>imgObj(s.id,s.im));
+  pagePlans.forEach(p=>{
+    const xobjs=[...sharedList,...p.imgs].map(x=>'/'+x.name+' '+x.id+' 0 R').join(' ');
+    const res=xobjs?'<</XObject<<'+xobjs+'>>>>':'<<>>';
+    obj(p.pageId,'<</Type/Page/Parent 2 0 R/MediaBox[0 0 595.28 841.89]/Resources'+res+'/Contents '+p.contentId+' 0 R>>');
+    p.imgs.forEach(x=>imgObj(x.id,x.im));
+    streamObj(p.contentId,'<</Filter/FlateDecode/Length '+p.stream.length+'>>',p.stream);
+  });
+  const xr=len,total=nextId;
   push('xref\n0 '+total+'\n0000000000 65535 f \n');
   for(let n=1;n<total;n++)push(String(offs[n]).padStart(10,'0')+' 00000 n \n');
-  push('trailer\n<</Size '+total+'/Root 1 0 R>>\nstartxref\n'+xr+'\n%%EOF');
+  push('trailer\n<</Size '+total+'/Root 1 0 R>>\nstartxref\n'+xr+'\n%%EOF\n');
   return new Blob(parts,{type:'application/pdf'});
 }
 function syncFromInput(){
@@ -705,18 +841,33 @@ async function exportPdf(){
   flushInput();
   const {ok,per,gh}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
   busy(true);$('msg').textContent='正在生成 PDF…';
+  const cv=document.createElement('canvas');
   try{
-    const imgs=[];
-    for(let i=0;i<ok.length;i+=per){
-      const cv=dSheet(ok.slice(i,i+per),per,gh);
-      const b=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.92));
-      imgs.push({data:new Uint8Array(await b.arrayBuffer()),w:cv.width,h:cv.height});
+    const dt=selectedDateInfo();
+    const topImg=await renderTopStrip(cv,dt);
+    const enc=new TextEncoder();
+    const strokeCache=new Map();
+    const pages=[];
+    const totalPages=Math.ceil(ok.length/per);
+    for(let i=0,pIdx=0;i<ok.length;i+=per,pIdx++){
+      if(totalPages>1)$('msg').textContent='正在生成 PDF（'+(pIdx+1)+'/'+totalPages+'）…';
+      const lay=layoutSheet(ok.slice(i,i+per),per);
+      const images={},headNames=[];
+      for(let j=0;j<lay.blocks.length;j++){
+        const b=lay.blocks[j];
+        const hn='H'+j;
+        headNames.push(hn);
+        images[hn]=await renderHeadStrip(cv,b.c,b.n,b.headH);
+      }
+      const rawStream=buildPageStream(lay,gh,strokeCache,headNames,'Top');
+      const stream=await deflateBytes(enc.encode(rawStream));
+      pages.push({stream,images});
       await new Promise(r=>setTimeout(r,0));
     }
     $('msg').textContent='';
-    await saveFile('汉字练习_'+today()+'.pdf',makePdf(imgs));
+    await saveFile('汉字练习_'+today()+'.pdf',makePdf(pages,{Top:topImg}));
   }catch(e){$('msg').textContent='生成失败：'+(e.message||e);}
-  busy(false);
+  finally{cv.width=0;cv.height=0;busy(false);}
 }
 function escMd(s){return String(s).replace(/\|/g,'\\|');}
 function buildMd(){

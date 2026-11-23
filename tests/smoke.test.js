@@ -18,6 +18,7 @@ vc.on('jsdomError', (e) => errors.push(e.message));
 const srcHtml = fs.readFileSync(file, 'utf8');
 assert.ok(!srcHtml.includes('window.claude'), '产物不应包含遗留的 window.claude 死代码');
 assert.ok(!srcHtml.includes('style.zoom'), '移动端预览缩放应使用 transform:scale 而非在 iOS Safari 下存在缺陷的 CSS zoom');
+assert.ok(!srcHtml.includes('DCTDecode') && !srcHtml.includes('image/jpeg'), '导出引擎应升级为无损 FlateDecode 混合矢量 PDF，不应残留 JPEG 位图导出代码');
 
 // 版权与第三方开源许可合规检查（All Rights Reserved + ARPHICPL 原封不动保留 + pinyin-pro 声明）
 const rootDir = path.join(__dirname, '..');
@@ -33,15 +34,33 @@ assert.ok(distArphic.equals(upstreamArphic), 'dist/ARPHICPL.TXT 必须与上游�
 assert.ok(srcHtml.includes(upstreamArphic.toString('utf8')), 'dist/index.html 应内嵌原封不动的 ARPHICPL.TXT 全文');
 assert.ok(srcHtml.includes('Modification Notice (APL Section 2a/2b') && srcHtml.includes('Copyright (c) 2022-present zh-lx'), 'dist/index.html 应内嵌笔画修改说明与 pinyin-pro 版权声明');
 
-// jsdom 没有 DecompressionStream / Blob.stream，这里用 Node 的 zlib 代替
+// jsdom 没有 DecompressionStream / CompressionStream / Blob.stream，这里用 Node 的 zlib 代替
 const dom = new JSDOM(srcHtml, {
   runScripts: 'dangerously',
   pretendToBeVisual: true,
   virtualConsole: vc,
   beforeParse(w) {
-    w.Blob = class { constructor(p) { this.p = p; } stream() { return { pipeThrough: () => ({ gz: this.p[0] }) }; } };
-    w.DecompressionStream = function () {};
-    w.Response = function (x) { this.json = async () => JSON.parse(zlib.gunzipSync(Buffer.from(x.gz)).toString()); };
+    w.Blob = class {
+      constructor(p, opts) { this.p = p; this.type = (opts && opts.type) || ''; }
+      stream() {
+        const buf = Buffer.concat(this.p.map((x) => (typeof x === 'string' ? Buffer.from(x) : Buffer.from(x))));
+        return { pipeThrough: (tr) => ({ op: tr.op, fmt: tr.fmt, buf }) };
+      }
+    };
+    w.DecompressionStream = function (fmt) { this.op = 'decompress'; this.fmt = fmt; };
+    w.CompressionStream = function (fmt) { this.op = 'compress'; this.fmt = fmt; };
+    w.Response = function (x) {
+      const run = () => {
+        if (x.op === 'decompress' && x.fmt === 'gzip') return zlib.gunzipSync(x.buf);
+        if (x.op === 'compress' && x.fmt === 'deflate') return zlib.deflateSync(x.buf);
+        throw new Error(`不支持的测试流转换：${x.op}/${x.fmt}`);
+      };
+      this.json = async () => JSON.parse(run().toString());
+      this.arrayBuffer = async () => {
+        const out = run();
+        return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength);
+      };
+    };
   },
 });
 
@@ -61,7 +80,7 @@ const poll = setInterval(() => {
   runTests(w, w.document);
 }, 50);
 
-function runTests(w, d) {
+async function runTests(w, d) {
   try {
     const setInp = (val) => {
       const inp = d.getElementById('inp');
@@ -256,8 +275,109 @@ function runTests(w, d) {
     assert.ok(d.getElementById('bpdf').classList.contains('alt') && d.getElementById('bmd').classList.contains('alt'), '导出 PDF 和导出 Markdown 应使用中色调');
     assert.strictEqual(typeof w.doPrint, 'function', '应提供 doPrint 打印函数');
 
-    const pdf = w.makePdf([{ data: new Uint8Array([255, 216, 255]), w: 10, h: 10 }]);
-    assert.ok(Buffer.from(pdf.p[0]).toString().startsWith('%PDF-1.4'), 'PDF 头不对');
+    // 10b. 原生混合矢量 PDF 引擎校验：SVG 路径转换、全库笔画无损转换、FlateDecode 内容流与无损贴图、多页 xref 字节偏移
+    assert.strictEqual(
+      w.svgPathToPdf('M0 0Q30 60 90 0Z'),
+      '0 0 m 20 40 50 40 90 0 c h',
+      '二次贝塞尔升阶三次贝塞尔控制点应精确满足 C1=P0+2/3(P1-P0), C2=P2+2/3(P1-P2)'
+    );
+    assert.strictEqual(
+      w.svgPathToPdf('M100-50l20 30-10 5H200v-15q30 60 90 0c1 2 3 4 5 6Z'),
+      '100 -50 m 120 -20 l 110 -15 l 200 -15 l 200 -30 l 220 10 250 10 290 -30 c 291 -28 293 -26 295 -24 c h',
+      '相对/绝对路径、无空格负号紧贴及连续坐标应精确转换为 PDF 指令'
+    );
+    let totalStrokesChecked = 0;
+    for (const c of allChars) {
+      for (const stroke of db[c].s) {
+        const pdfStroke = w.svgPathToPdf(stroke);
+        assert.ok(/^-?\d+(?:\.\d+)? -?\d+(?:\.\d+)? m /.test(pdfStroke), `字「${c}」矢量路径转换异常：${pdfStroke.slice(0, 30)}`);
+        assert.ok(!/NaN|undefined|Infinity/.test(pdfStroke), `字「${c}」矢量路径出现非法数值：${pdfStroke.slice(0, 40)}`);
+        totalStrokesChecked++;
+      }
+    }
+
+    const enc = new TextEncoder();
+    const strokeCache = new Map();
+    const layP1 = w.layoutSheet([...'露霸树桥数欢'], 6);
+    const layP2 = w.layoutSheet([...'园活'], 6);
+    const rawS1 = w.buildPageStream(layP1, 3, strokeCache, layP1.blocks.map((_, i) => 'H' + i), 'Top');
+    const rawS2 = w.buildPageStream(layP2, 2, strokeCache, layP2.blocks.map((_, i) => 'H' + i), 'Top');
+    assert.ok(!/NaN|undefined|Infinity/.test(rawS1 + rawS2), 'PDF 页面矢量内容流不应出现非法数值');
+    const compS1 = await w.deflateBytes(enc.encode(rawS1));
+    const compS2 = await w.deflateBytes(enc.encode(rawS2));
+    assert.ok(compS1.length < rawS1.length * 0.25, `高密度矢量内容流 FlateDecode 压缩比应显著有效（${compS1.length}/${rawS1.length}）`);
+
+    const topGrayRaw = new Uint8Array(16 * 4).fill(255);
+    const headRgbRaw = new Uint8Array(16 * 4 * 3).fill(240);
+    const topImg = { w: 16, h: 4, gray: true, data: await w.deflateBytes(topGrayRaw) };
+    const headImg = { w: 16, h: 4, gray: false, data: await w.deflateBytes(headRgbRaw) };
+    const makeImgs = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => ['H' + i, headImg]));
+
+    const pdfBlob = w.makePdf(
+      [
+        { stream: compS1, images: makeImgs(layP1.blocks.length) },
+        { stream: compS2, images: makeImgs(layP2.blocks.length) },
+      ],
+      { Top: topImg }
+    );
+    assert.strictEqual(pdfBlob.type, 'application/pdf', '导出 Blob MIME 应为 application/pdf');
+    const pdfBuf = Buffer.concat(pdfBlob.p.map((x) => (typeof x === 'string' ? Buffer.from(x) : Buffer.from(x))));
+    const pdfLat = pdfBuf.toString('latin1');
+    assert.ok(pdfLat.startsWith('%PDF-1.4\n'), 'PDF 头部应为 %PDF-1.4');
+    assert.ok(pdfLat.trimEnd().endsWith('%%EOF'), 'PDF 结尾应为 %%EOF');
+    assert.ok(pdfLat.includes('/Count 2') && pdfLat.includes('/MediaBox[0 0 595.28 841.89]'), 'PDF 应声明 2 页 A4 物理尺寸');
+    assert.ok(pdfLat.includes('/ColorSpace/DeviceGray') && pdfLat.includes('/ColorSpace/DeviceRGB'), '页眉应使用 DeviceGray，标题行应使用 DeviceRGB');
+    assert.ok(!pdfLat.includes('/DCTDecode'), '混合矢量 PDF 不应使用有损 JPEG（DCTDecode）');
+
+    // 验证 xref 字节偏移表精确指向每个 PDF 对象
+    const sxMatch = pdfLat.match(/startxref\n(\d+)\n%%EOF/);
+    assert.ok(sxMatch, 'PDF 缺少合法 startxref');
+    const xrefOff = Number(sxMatch[1]);
+    assert.ok(pdfLat.slice(xrefOff).startsWith('xref\n0 '), 'startxref 偏移未指向 xref 表起始位置');
+    const xrefLines = pdfLat.slice(xrefOff).split('\n').filter((l) => /^\d{10} \d{5} [nf] ?$/.test(l));
+    assert.ok(xrefLines.length >= 13, `PDF 对象数量异常：${xrefLines.length}`);
+    for (let objNum = 1; objNum < xrefLines.length; objNum++) {
+      const off = Number(xrefLines[objNum].slice(0, 10));
+      assert.ok(
+        pdfLat.slice(off, off + 20).startsWith(`${objNum} 0 obj\n`),
+        `xref 对象 ${objNum} 偏移 ${off} 未精确指向对象头：${JSON.stringify(pdfLat.slice(off, off + 20))}`
+      );
+    }
+
+    // 解压校验所有 FlateDecode 流（页眉灰度图、标题 RGB 图及两页矢量内容流）
+    const streamRe = /<<([^>]+)>>\nstream\n/g;
+    let m;
+    let imageStreams = 0;
+    const decodedPages = [];
+    while ((m = streamRe.exec(pdfLat))) {
+      const dict = m[1];
+      assert.ok(dict.includes('/Filter/FlateDecode'), `流对象应使用 FlateDecode：${dict}`);
+      const lenM = dict.match(/\/Length (\d+)/);
+      assert.ok(lenM, `流对象缺少 /Length：${dict}`);
+      const sLen = Number(lenM[1]);
+      const dataStart = m.index + m[0].length;
+      const inflated = zlib.inflateSync(pdfBuf.subarray(dataStart, dataStart + sLen));
+      if (dict.includes('/Subtype/Image')) {
+        const expectedBytes = dict.includes('/DeviceGray') ? topGrayRaw.length : headRgbRaw.length;
+        assert.strictEqual(inflated.length, expectedBytes, '无损贴图流解压长度应精确匹配像素字节数');
+        imageStreams++;
+      } else {
+        decodedPages.push(inflated.toString('utf8'));
+      }
+      streamRe.lastIndex = dataStart + sLen;
+    }
+    assert.strictEqual(imageStreams, 1 + layP1.blocks.length + layP2.blocks.length, '应包含 1 份共享页眉图 + 全部汉字标题行贴图');
+    assert.strictEqual(decodedPages.length, 2, '应包含 2 页压缩矢量内容流');
+    assert.strictEqual(decodedPages[0], rawS1, '第 1 页矢量内容流解压后应与原始内容完全一致');
+    assert.strictEqual(decodedPages[1], rawS2, '第 2 页矢量内容流解压后应与原始内容完全一致');
+    assert.ok(
+      decodedPages[0].includes('/Top Do') && decodedPages[0].includes('/H0 Do') &&
+      decodedPages[0].includes('0.863 0.604 0.573 RG') && decodedPages[0].includes('0.133 g') &&
+      decodedPages[0].includes('0.784 g') && decodedPages[0].includes('0 g') &&
+      decodedPages[0].includes('0.839 g') && decodedPages[0].includes(' re S') &&
+      decodedPages[0].includes(' c ') && decodedPages[0].includes(' f\n'),
+      '页面内容流应完整包含页眉/标题贴图引用、田字格虚线与外框及矢量笔画填充指令'
+    );
 
     const realPoly = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'polyphones.json'), 'utf8'));
     const realCheck = checkPolyphones(realPoly, new Set(allChars));
@@ -265,7 +385,7 @@ function runTests(w, d) {
     const badCheck = checkPolyphones({ 种: { zhòng: ['种子'] } });
     assert.ok(badCheck.warnings.length >= 1, '校验脚本应能报出故意写错读音的例词');
 
-    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），排版折行、空白巩固区、日期下划线/手填、单音字改音、防空勾、局部保焦点、一键打印、Markdown 与 PDF 均正常`);
+    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（${totalStrokesChecked} 条笔画矢量转换全通过；组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），混合矢量 PDF（首页流 ${(rawS1.length / 1024).toFixed(1)} KB → ${(compS1.length / 1024).toFixed(1)} KB）、排版折行、空白巩固区、日期下划线/手填、单音字改音、防空勾、局部保焦点、一键打印与 Markdown 均正常`);
     process.exit(0);
   } catch (e) {
     console.error('冒烟测试失败：' + e.message);
