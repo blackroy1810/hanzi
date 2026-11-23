@@ -1,0 +1,53 @@
+Copyright (c) 2026 blackroy1810. All Rights Reserved.
+
+【版权与使用声明】
+
+1. 权利归属与范围
+   本项目（hanzi）的全部原创源代码（包括但不限于 src/、scripts/、tests/）、界面与排版实现、
+   文档以及人工筛选整理的多音字与常用词表（data/polyphones.json、data/words.json）的著作权
+   均归原作者 blackroy1810 所有，保留全部权利（All Rights Reserved）。
+
+2. 允许的用途
+   仅允许个人及家庭用户通过官方发布页面免费在线使用或个人离线打印练习纸，以及出于个人学习
+   目的浏览仓库源码。
+
+3. 禁止的行为
+   未经原作者明确书面许可，禁止任何个人、组织或商业主体对本项目原创部分进行以下行为：
+   - 任何形式的商业使用、收费服务或盈利性分发；
+   - 复制、修改、二次打包或公开重新部署、分发本项目源码或构建产物；
+   - 将本项目（或其衍生修改版本）封装为微信小程序、移动 App、在线付费服务、付费课程配套工具等产品；
+   - 去除或篡改本版权声明及第三方开源许可声明。
+
+4. 第三方开源数据声明（独立适用其原协议）
+   本项目在构建或产物中集成的第三方开源数据（包括但不限于源自 hanzi-writer-data /
+   Make Me A Hanzi / Arphic Technology 文鼎字库的汉字笔画矢量数据，以及 pinyin-pro、
+   @pinyin-pro/data 的拼音与自动词典数据）不属于上述专有权利范围，仍分别遵循其原始开源协议。
+   经本项目筛选与路径压缩后的汉字笔画矢量数据继续遵循 Arphic Public License 开放获取，完整
+   许可原文与修改说明见 THIRD_PARTY_LICENSES.md 及 THIRD_PARTY_LICENSES/ARPHICPL.TXT。
+
+5. 免责声明
+   本软件按“现状”（AS IS）提供，不附带任何明示或暗示的担保（包括但不限于适销性、特定用途
+   适用性及不侵权担保）。因使用本软件产生的任何直接或间接损失，作者不承担法律责任。
+
+================================================================================
+
+[English Summary]
+
+All original source code, layout and export implementations, documentation, and
+curated word lists (data/polyphones.json, data/words.json) in this repository
+are Copyright (c) 2026 blackroy1810. All Rights Reserved.
+
+Permission is granted solely for personal, non-commercial household use via the
+official deployment and for viewing the source code for personal study. Without
+prior written permission from the copyright holder, you may not copy, modify,
+redistribute, publicly host, commercially exploit, or repackage this work
+(including wrapping it into WeChat Mini Programs, mobile apps, online services,
+or paid course materials).
+
+Third-party open-source data used during build or bundled in build artifacts
+(including stroke vector data derived from hanzi-writer-data / Make Me A Hanzi /
+Arphic Public License, and pinyin/dictionary data from pinyin-pro and
+@pinyin-pro/data) remain governed by their respective open-source licenses and
+are not restricted by the proprietary terms above. See THIRD_PARTY_LICENSES.md
+and THIRD_PARTY_LICENSES/ARPHICPL.TXT for full license texts and modification
+notices.

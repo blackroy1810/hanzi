@@ -21,7 +21,7 @@
 - `src/app.html`：页面与全部前端逻辑，唯一的运行时源码文件。内含字库占位符 `__DB__`，**严禁修改或删除**。
 - `data/polyphones.json`：小学常见多音字例词表（组词最高优先级；表内字默认仅勾选有例词的常用读音，隐藏冷僻音）。
 - `data/words.json`：常见普通汉字手写推荐组词表（次高优先级）。
-- `scripts/build.js`：构建脚本。组装 GB2312 一级+二级全集与 `@pinyin-pro/data/modern.json` 现代补字（约 6988 字），对 `hanzi-writer-data` 笔画执行 SVG 相对路径压缩与轻量量化，结合 `pinyin-pro` 按三层优先级（`data/polyphones.json` > `data/words.json` > `@pinyin-pro/data` 自动兜底）合入推荐组词并执行例词校验，经 gzip + base64 压缩后替换 `__DB__`，输出单文件 `dist/index.html`。
+- `scripts/build.js`：构建脚本。组装 GB2312 一级+二级全集与 `@pinyin-pro/data/modern.json` 现代补字（约 6988 字），对 `hanzi-writer-data` 笔画执行 SVG 相对路径压缩与轻量量化，结合 `pinyin-pro` 按三层优先级（`data/polyphones.json` > `data/words.json` > `@pinyin-pro/data` 自动兜底）合入推荐组词并执行例词校验，经 gzip + base64 压缩后替换 `__DB__`，输出单文件 `dist/index.html`（并在产物末尾内嵌版权与第三方开源许可全文，同时原封不动复制 `dist/ARPHICPL.TXT`）。
 - `scripts/word-dict.js`：构建期自动词典提取模块。仅在构建时读取 `@pinyin-pro/data` 为手写词表外汉字补齐常用组词，内置少儿友好敏感词过滤（`BLOCKED_RE`）、单音字轻声归并及未收录多音字冷僻音词频收敛；不进入运行时代码。
 - `scripts/check-polyphones.js`：构建期例词校验脚本（支持单独运行），使用 `pinyin-pro` 检查 `data/polyphones.json` 与 `data/words.json` 的缺字、重复定义及读音一致性（内置人工核验的 `pinyin-pro` 已知误判白名单）；异常仅输出警告，不阻断构建。
 - `tests/smoke.test.js`：基于 `jsdom` 的冒烟测试，验证 `dist/index.html` 无脚本错误、扩容字库与相对路径校验、组词覆盖率（一级常用字 ≥ 98%、全库 ≥ 85%）与词条过滤、多音字勾选与冷僻音收敛、自定义拼音与全汉字组词增删、一键打印、Markdown 与 PDF 生成器及校验脚本。
@@ -29,6 +29,7 @@
 - `.github/ISSUE_TEMPLATE/task.md`：多 LLM 协作任务单模板。
 - `.github/pull_request_template.md`：PR 审阅、门禁与实测清单模板。
 - `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` / `.github/copilot-instructions.md`：统一规范真相源及各 AI 工具轻量入口。
+- `LICENSE` / `THIRD_PARTY_LICENSES.md` / `THIRD_PARTY_LICENSES/ARPHICPL.TXT`：本项目原创部分版权声明（All Rights Reserved，非商用）与第三方开源数据许可及修改声明。
 - `CHANGELOG.md`：版本迭代记录（倒序排列）。
 
 ## 常用命令

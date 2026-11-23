@@ -11,6 +11,8 @@ const root = path.join(__dirname, '..');
 const dataDir = path.join(root, 'node_modules', 'hanzi-writer-data');
 const polyFile = path.join(root, 'data', 'polyphones.json');
 const wordsFile = path.join(root, 'data', 'words.json');
+const arphicLicenseFile = path.join(root, 'THIRD_PARTY_LICENSES', 'ARPHICPL.TXT');
+const pinyinProLicenseFile = path.join(root, 'node_modules', 'pinyin-pro', 'LICENSE');
 const QUANT_STEP = 4; // 1024 坐标网格按步长 4 量化，17 mm 格内最大偏移 ≤ 0.033 mm（小于 600 DPI 单墨点）
 
 function decodeGb2312Range(hiStart, hiEnd) {
@@ -163,6 +165,48 @@ function buildDb(polyphones, wordsMap) {
   };
 }
 
+function buildLicenseComment() {
+  if (!fs.existsSync(arphicLicenseFile)) {
+    throw new Error('缺少第三方许可文件：' + arphicLicenseFile);
+  }
+  const arphicText = fs.readFileSync(arphicLicenseFile, 'utf8');
+  const pinyinProText = fs.existsSync(pinyinProLicenseFile)
+    ? fs.readFileSync(pinyinProLicenseFile, 'utf8').trim()
+    : 'MIT License - Copyright (c) 2022-present zh-lx (pinyin-pro)';
+
+  const body = [
+    'Copyright (c) 2026 blackroy1810. All Rights Reserved.',
+    'Original code, layout logic, and curated word lists are reserved for personal non-commercial use only.',
+    'Commercial use, redistribution, or repackaging (e.g. Mini Programs, apps, paid courses) is prohibited without written permission.',
+    '',
+    '=== THIRD-PARTY LICENSES & MODIFICATION NOTICE ===',
+    '',
+    '1. hanzi-writer-data (derived from Make Me A Hanzi / Arphic Technology fonts)',
+    '   License: Arphic Public License (verbatim text included below and distributed alongside as ARPHICPL.TXT).',
+    '   Modification Notice (APL Section 2a/2b, updated 2026-11-23):',
+    '   Built by scripts/build.js: selected a subset of GB2312 + modern CJK characters, quantized SVG stroke paths',
+    '   (step=4) and converted them to relative SVG path commands, then packaged as gzip+base64 inside this file.',
+    '   The modified stroke vector data ("s" arrays in the embedded DB) remains Freely Available under the Arphic',
+    '   Public License. Independent application code and curated word lists are separate works not covered by APL.',
+    '',
+    arphicText,
+    '',
+    '=== pinyin-pro (MIT License) ===',
+    '',
+    pinyinProText,
+    '',
+    '=== @pinyin-pro/data (ISC / MIT License) ===',
+    '',
+    'Source: https://github.com/chinese-data/pinyin-pro-data',
+    'Used at build time to supplement modern character list and fallback example words (filtered and frequency-ranked).',
+  ].join('\n');
+
+  if (body.includes('--')) {
+    throw new Error('许可注释包含非法 HTML 注释序列 --');
+  }
+  return '\n<!--\n' + body + '\n-->\n';
+}
+
 function main() {
   const polyphones = loadJson(polyFile);
   const wordsMap = loadJson(wordsFile);
@@ -192,11 +236,14 @@ function main() {
   const tpl = fs.readFileSync(path.join(root, 'src', 'app.html'), 'utf8');
   if (!tpl.includes('__DB__')) throw new Error('src/app.html 缺少 __DB__ 占位符');
 
-  fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
-  const outFile = path.join(root, 'dist', 'index.html');
-  fs.writeFileSync(outFile, tpl.replace('__DB__', () => b64));
+  const distDir = path.join(root, 'dist');
+  fs.mkdirSync(distDir, { recursive: true });
+  const outFile = path.join(distDir, 'index.html');
+  const licenseComment = buildLicenseComment();
+  fs.writeFileSync(outFile, tpl.replace('__DB__', () => b64) + licenseComment);
+  fs.copyFileSync(arphicLicenseFile, path.join(distDir, 'ARPHICPL.TXT'));
   console.log(
-    `字库 ${count} 字（一级 ${l1Count} + 二级 ${l2Count} + 现代补字 ${extraCount}，缺 ${missing}），dist/index.html ${(fs.statSync(outFile).size / 1048576).toFixed(2)} MB`
+    `字库 ${count} 字（一级 ${l1Count} + 二级 ${l2Count} + 现代补字 ${extraCount}，缺 ${missing}），dist/index.html ${(fs.statSync(outFile).size / 1048576).toFixed(2)} MB（已附带 dist/ARPHICPL.TXT 与内嵌许可声明）`
   );
 }
 
