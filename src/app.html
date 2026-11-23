@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>汉字笔顺练习纸生成器</title>
 <style>
-:root{--bg:#e9e9ec;--panel:#fff;--card:#f5f5f7;--ink:#222;--muted:#666;--line:#d0d0d6;--accent:#c0392b;--accent-bg:#fdeceb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root{--bg:#e9e9ec;--panel:#fff;--card:#f5f5f7;--ink:#222;--muted:#666;--line:#d0d0d6;--accent:#c0392b;--accent-bg:#fdeceb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);-webkit-text-size-adjust:100%;text-size-adjust:100%}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#232327;--panel:#34343a;--card:#2a2a30;--ink:#eee;--muted:#aaa;--line:#55555d;--accent:#e05a4d;--accent-bg:#472927}}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
 .ui{background:var(--panel);padding:12px 14px;border-bottom:1px solid var(--line)}
@@ -65,8 +65,9 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 .row.blank-row:last-child{margin-bottom:0!important}
 .cell{box-sizing:border-box;border:.35mm solid #444;flex:none;margin-right:-.35mm}
 svg{display:block}
+@media (pointer:coarse){select,input[type=text],input[type=date],.padd-py input,.wadd,.py-inp{font-size:16px}}
 @page{size:A4;margin:0}
-@media print{body{background:#fff}.ui{display:none}.wrap{padding:0;overflow:visible}#root{zoom:1!important}.sheet{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet:last-child{page-break-after:auto;break-after:auto}}
+@media print{body{background:#fff}.ui{display:none}.wrap{padding:0;overflow:visible;height:auto!important}#root{transform:none!important;width:auto!important;margin-left:0!important}.sheet{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet:last-child{page-break-after:auto;break-after:auto}}
 </style></head><body>
 <div class="ui">
 <h1>汉字笔顺练习纸</h1>
@@ -379,8 +380,6 @@ function headHtml(c){
   return '<div class="py-line'+(multi?' multi':'')+'"><span class="py-in">'+items+'</span></div>';
 }
 function fitHeads(){
-  const r=$('root'),prev=r.style.zoom;
-  r.style.zoom='1';
   document.querySelectorAll('.py-line').forEach(line=>{
     line.style.setProperty('--sc','1');
     const inn=line.firstElementChild;
@@ -391,7 +390,6 @@ function fitHeads(){
       line.style.setProperty('--sc',sc.toFixed(4));
     }
   });
-  r.style.zoom=prev;
 }
 const PAGE={W:210,H:297,PAD_X:13.25,PAD_Y:10,TOP_H:8,CONTENT_W:183.5,BODY_H:269,CELL:17,BORDER:0.35,COLS:11,WRAP_MIN:15,BLANK_TOP_GAP:15,BLANK_TOP_MIN:11,BLANK_ROW_GAP:13,BLANK_ROW_MIN:10,MAX_BLANK_ROWS:5};
 function localDateParts(d=new Date()){
@@ -537,7 +535,23 @@ function render(){
   fit();
   try{localStorage.setItem('hz_in',$('inp').value);}catch(e){}
 }
-function fit(){const w=Math.min(1,(innerWidth-8)/794);$('root').style.zoom=w;}
+function fit(){
+  const r=$('root'),wrap=r.parentElement;
+  const sh=r.querySelector('.sheet');
+  if(!sh){r.style.transform='';r.style.width='';r.style.marginLeft='';wrap.style.height='';return;}
+  const viewW=document.documentElement.clientWidth||innerWidth;
+  const sheetW=sh.offsetWidth||794;
+  const s=Math.min(1,Math.max(0.2,(viewW-8)/sheetW));
+  if(s>=0.999){
+    r.style.transform='';r.style.width='';r.style.marginLeft='';wrap.style.height='';
+  }else{
+    r.style.width=sheetW+'px';
+    r.style.transformOrigin='top left';
+    r.style.transform='scale('+s.toFixed(4)+')';
+    r.style.marginLeft=Math.max(0,(viewW-sheetW*s)/2).toFixed(1)+'px';
+    wrap.style.height=Math.ceil(r.scrollHeight*s)+'px';
+  }
+}
 async function saveFile(name,blob){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);return true;
@@ -729,6 +743,7 @@ async function exportMd(){
   await saveFile('汉字练习_'+today()+'.md',new Blob([buildMd()],{type:'text/markdown'}));
 }
 addEventListener('resize',()=>{fitHeads();fit();});
+addEventListener('orientationchange',()=>setTimeout(()=>{fitHeads();fit();},120));
 addEventListener('afterprint',fit);
 $('inp').oninput=()=>{if(inpTimer)clearTimeout(inpTimer);inpTimer=setTimeout(()=>{inpTimer=null;syncFromInput();},150);};
 $('per').onchange=render;$('ghost').onchange=render;

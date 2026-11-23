@@ -17,6 +17,7 @@ vc.on('jsdomError', (e) => errors.push(e.message));
 
 const srcHtml = fs.readFileSync(file, 'utf8');
 assert.ok(!srcHtml.includes('window.claude'), '产物不应包含遗留的 window.claude 死代码');
+assert.ok(!srcHtml.includes('style.zoom'), '移动端预览缩放应使用 transform:scale 而非在 iOS Safari 下存在缺陷的 CSS zoom');
 
 // jsdom 没有 DecompressionStream / Blob.stream，这里用 Node 的 zlib 代替
 const dom = new JSDOM(srcHtml, {
