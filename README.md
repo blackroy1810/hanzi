@@ -40,3 +40,7 @@ git branch -D feat/<topic>-<model>
 
 ## 开发与协作规范
 完整项目结构、安全红线、本地门禁及多 LLM 协作流程（并行对比 / 串行接力）详见 [AGENTS.md](./AGENTS.md)。
+
+## 版权与第三方许可
+- **原创部分（All Rights Reserved）**：本项目原创源码、排版与导出实现、文档及手写词表（`data/`）版权归作者 `blackroy1810` 所有，仅限个人及家庭非商业自用，未经书面许可禁止商业使用或二次封装为微信小程序、App、付费课程工具等，详见 [LICENSE](./LICENSE)。
+- **第三方开源数据**：内置汉字笔画矢量数据衍生自 `hanzi-writer-data`（Make Me A Hanzi / 文鼎字库），遵循 **Arphic Public License**（原文见 [THIRD_PARTY_LICENSES/ARPHICPL.TXT](./THIRD_PARTY_LICENSES/ARPHICPL.TXT)）；拼音与自动兜底词典依赖 `pinyin-pro`（MIT）与 `@pinyin-pro/data`（ISC / MIT）。完整第三方许可与笔画修改说明见 [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)。

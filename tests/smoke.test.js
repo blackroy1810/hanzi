@@ -19,6 +19,20 @@ const srcHtml = fs.readFileSync(file, 'utf8');
 assert.ok(!srcHtml.includes('window.claude'), '产物不应包含遗留的 window.claude 死代码');
 assert.ok(!srcHtml.includes('style.zoom'), '移动端预览缩放应使用 transform:scale 而非在 iOS Safari 下存在缺陷的 CSS zoom');
 
+// 版权与第三方开源许可合规检查（All Rights Reserved + ARPHICPL 原封不动保留 + pinyin-pro 声明）
+const rootDir = path.join(__dirname, '..');
+const licenseTxt = fs.readFileSync(path.join(rootDir, 'LICENSE'), 'utf8');
+assert.ok(licenseTxt.includes('All Rights Reserved') && licenseTxt.includes('THIRD_PARTY_LICENSES/ARPHICPL.TXT'), 'LICENSE 应声明保留全部权利并区分第三方开源数据');
+const thirdPartyMd = fs.readFileSync(path.join(rootDir, 'THIRD_PARTY_LICENSES.md'), 'utf8');
+assert.ok(thirdPartyMd.includes('hanzi-writer-data') && thirdPartyMd.includes('pinyin-pro') && thirdPartyMd.includes('@pinyin-pro/data'), 'THIRD_PARTY_LICENSES.md 应涵盖全部第三方数据依赖');
+const upstreamArphic = fs.readFileSync(path.join(rootDir, 'node_modules', 'hanzi-writer-data', 'ARPHICPL.TXT'));
+const repoArphic = fs.readFileSync(path.join(rootDir, 'THIRD_PARTY_LICENSES', 'ARPHICPL.TXT'));
+const distArphic = fs.readFileSync(path.join(rootDir, 'dist', 'ARPHICPL.TXT'));
+assert.ok(repoArphic.equals(upstreamArphic), 'THIRD_PARTY_LICENSES/ARPHICPL.TXT 必须与上游原文逐字节一致');
+assert.ok(distArphic.equals(upstreamArphic), 'dist/ARPHICPL.TXT 必须与上游原文逐字节一致');
+assert.ok(srcHtml.includes(upstreamArphic.toString('utf8')), 'dist/index.html 应内嵌原封不动的 ARPHICPL.TXT 全文');
+assert.ok(srcHtml.includes('Modification Notice (APL Section 2a/2b') && srcHtml.includes('Copyright (c) 2022-present zh-lx'), 'dist/index.html 应内嵌笔画修改说明与 pinyin-pro 版权声明');
+
 // jsdom 没有 DecompressionStream / Blob.stream，这里用 Node 的 zlib 代替
 const dom = new JSDOM(srcHtml, {
   runScripts: 'dangerously',
