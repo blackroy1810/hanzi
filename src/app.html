@@ -12,13 +12,14 @@ textarea{width:100%;box-sizing:border-box;font-size:20px;padding:8px;border:1px 
 .opts{display:flex;flex-wrap:wrap;gap:10px 16px;margin:8px 0;font-size:14px;align-items:center}
 select,input[type=text],input[type=date]{font-size:14px;padding:4px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
 .dt-grp{display:inline-flex;align-items:center;gap:6px}
-.dt-blank{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
-.dt-blank input{margin:0;accent-color:var(--accent)}
+.dt-auto{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.dt-auto input{margin:0;accent-color:var(--accent)}
 button.alt{background:#555}button:disabled{opacity:.5}button{font-size:15px;padding:8px 18px;border:0;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer}
 button.mini{font-size:12px;padding:3px 8px;border-radius:6px;background:#666;color:#fff;line-height:1.4}
 button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
 #poly{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .pcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.pcard.off{opacity:.65;border-style:dashed}
 .pcard-top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
 .pchar{font-size:20px;font-weight:700;min-width:24px}
 .ptag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--panel);font-size:14px;cursor:pointer;user-select:none}
@@ -42,7 +43,11 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 .sbox summary{font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
 .slist{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .srow{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;font-size:13px}
+.srow.off{opacity:.55}
 .srow .pchar{font-size:18px;min-width:20px}
+.stag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
+.stag.on{border-color:var(--accent);background:var(--accent-bg)}
+.stag .s-cb{margin:0;accent-color:var(--accent);cursor:pointer}
 #msg{font-size:13px;color:#c0392b;margin-top:6px;min-height:1em}
 .tip{font-size:12px;opacity:.7;margin-top:4px}
 .wrap{padding:12px 0;overflow:hidden}
@@ -64,24 +69,35 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 .row.steps-r2{margin-top:-.35mm}
 .row.blank-row:last-child{margin-bottom:0!important}
 .cell{box-sizing:border-box;border:.35mm solid #444;flex:none;margin-right:-.35mm}
+.sheet[data-sheet="back"]{--cm:17mm;--pyh:6.2mm;--pypt:11.5pt}
+.drow{display:flex;align-items:flex-end}
+.wgrp{display:inline-flex;flex-direction:column;flex:none}
+.wgrp .cell:last-child,.wgrp .wpy-cell:last-child{margin-right:0}
+.wpy-row{display:flex;align-items:flex-end;height:var(--pyh)}
+.wpy-cell{width:var(--cm);flex:none;margin-right:-.35mm;box-sizing:border-box;display:flex;justify-content:center;align-items:flex-end;padding-bottom:calc(var(--pyh) * 0.16)}
+.wpy{font-family:Arial,"PingFang SC",sans-serif;font-size:var(--pypt);line-height:1.1;color:#222;white-space:nowrap;padding:0 2px;border-radius:3px}
+.wpy.poly-py{cursor:pointer;text-decoration:underline dotted rgba(192,57,43,.55);text-underline-offset:2px}
+.wpy.poly-py:hover{background:rgba(192,57,43,.1);color:#c0392b}
 svg{display:block}
 @media (pointer:coarse){select,input[type=text],input[type=date],.padd-py input,.wadd,.py-inp{font-size:16px}}
 @page{size:A4;margin:0}
-@media print{body{background:#fff}.ui{display:none}.wrap{padding:0;overflow:visible;height:auto!important}#root{transform:none!important;width:auto!important;margin-left:0!important}.sheet{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet:last-child{page-break-after:auto;break-after:auto}}
+@media print{body{background:#fff}.ui{display:none}.wrap{padding:0;overflow:visible;height:auto!important}#root{transform:none!important;width:auto!important;margin-left:0!important}.sheet{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet:last-child{page-break-after:auto;break-after:auto}.wpy.poly-py{cursor:default;background:transparent!important;text-decoration:none!important;border:0!important;outline:0!important;box-shadow:none!important;color:#222!important}}
 </style></head><body>
 <div class="ui">
 <h1>汉字笔顺练习纸</h1>
 <textarea id="inp" rows="2" placeholder="输入生字，例如：树桥数欢园"></textarea>
 <div class="opts">
+<label>模式 <select id="mode"><option value="stroke" selected>笔顺</option><option value="duplex">双面（笔顺+默写）</option><option value="dictation">仅默写</option></select></label>
+<button type="button" id="bshuf" class="mini" style="display:none" onclick="reshuffleDict()">乱序</button>
 <label>每页字数 <select id="per"><option>4</option><option>5</option><option selected>6</option></select></label>
-<label>描红格 <select id="ghost"><option>0</option><option>2</option><option selected>3</option><option>4</option></select></label>
-<span class="dt-grp"><label>日期 <input type="date" id="dt"></label><label class="dt-blank"><input type="checkbox" id="dtBlank"> 手填</label></span>
+<label id="ghostWrap">描红格 <select id="ghost"><option>0</option><option>2</option><option selected>3</option><option>4</option></select></label>
+<span class="dt-grp"><label class="dt-auto"><input type="checkbox" id="dtAuto" checked> 自动日期</label><input type="date" id="dt"></span>
 <button id="bprint" onclick="doPrint()">一键打印</button><button id="bpdf" class="alt" onclick="exportPdf()">导出 PDF</button><button id="bmd" class="alt" onclick="exportMd()">导出 Markdown</button>
 </div>
 <div id="poly"></div>
 <div id="singles"></div>
 <div id="msg">字库加载中…如果一直没变化，说明当前打开方式不能运行网页，请改用 Safari 或 Chrome 打开页面链接（不要用文件预览或微信内置浏览器）。</div>
-<div class="tip">收录常用字约 7000 个。多音字可勾选读音、添加自定义拼音，所有汉字均支持自由增删组词（自动保存在本机）。点击“一键打印”或导出 PDF 后请选 A4 纸、缩放选“实际大小”。</div>
+<div class="tip">收录常用字约 7000 个，支持笔顺、双面（正面笔顺+反面默写）与仅默写模式。多音字可勾选读音、所有汉字可增删组词并实时同步反面默写，预览点击多音搭档字可切音（自动保存在本机）。打印或导出 PDF 请选 A4 纸、缩放选“实际大小”，双面打印选长边翻转。</div>
 </div>
 <div class="wrap"><div id="root"></div></div>
 <script>
@@ -93,6 +109,40 @@ let singlesOpen=null;
 let lastCharKey='';
 let inpTimer=null;
 const CFG_KEY='hz_poly_v1';
+const MODE_KEY='hz_mode_v1';
+const PARTNER_PY_KEY='hz_partner_py_v1';
+const MODE_META={
+  stroke:{title:'汉字笔顺练习',filePrefix:'汉字练习'},
+  duplex:{title:'汉字笔顺练习',backTitle:'生字默写练习',filePrefix:'汉字双面练习'},
+  dictation:{title:'生字默写练习',backTitle:'生字默写练习',filePrefix:'生字默写练习'}
+};
+let partnerPy={};
+let shuffleSeed=0x243f6a88;
+function curMode(){
+  const el=$('mode');
+  const v=el?el.value:'stroke';
+  return MODE_META[v]?v:'stroke';
+}
+function syncModeUi(){
+  const m=curMode();
+  $('bshuf').style.display=m==='stroke'?'none':'';
+  $('ghostWrap').style.display=m==='dictation'?'none':'';
+}
+function syncDateUi(){
+  $('dt').style.display=$('dtAuto').checked?'':'none';
+}
+function loadUiState(){
+  try{
+    const m=localStorage.getItem(MODE_KEY);
+    if(m&&MODE_META[m])$('mode').value=m;
+  }catch(e){}
+  try{
+    const raw=localStorage.getItem(PARTNER_PY_KEY);
+    if(raw){const p=JSON.parse(raw);if(p&&typeof p==='object')partnerPy=p;}
+  }catch(e){}
+}
+function savePartnerPy(){try{localStorage.setItem(PARTNER_PY_KEY,JSON.stringify(partnerPy));}catch(e){}}
+function partnerPyKey(target,targetPy,word,ci){return target+':'+targetPy+':'+word+':'+ci;}
 const L='stroke="#dc9a92" stroke-width="18" stroke-dasharray="26 22"';
 const grid='<line x1="512" y1="0" x2="512" y2="1024" '+L+'/><line x1="0" y1="512" x2="1024" y2="512" '+L+'/>';
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -119,9 +169,25 @@ function isDefOn(c,p){
   if(DB&&DB[c]&&DB[c].w)return defWords(c,p).length>0;
   return Boolean(DB&&DB[c]&&p===DB[c].p[0]);
 }
-function isOn(c,p){
+function isDictOnly(){return curMode()==='dictation';}
+function isRawOn(c,p){
   if(cfg[c]&&cfg[c].on&&Object.prototype.hasOwnProperty.call(cfg[c].on,p))return Boolean(cfg[c].on[p]);
   return isDefOn(c,p);
+}
+function isPolyAllRawOff(c){
+  const pys=allPys(c);
+  return pys.length>0&&!pys.some(x=>isRawOn(c,x));
+}
+function isOn(c,p){
+  if(!isDictOnly()&&isPolyAllRawOff(c)){
+    const hasDef=allPys(c).some(x=>isDefOn(c,x));
+    return hasDef?isDefOn(c,p):Boolean(DB&&DB[c]&&p===DB[c].p[0]);
+  }
+  return isRawOn(c,p);
+}
+function isSingleOn(c){
+  if(!isDictOnly())return true;
+  return !(cfg[c]&&cfg[c].so===false);
 }
 function wordsOf(c,p){
   if(cfg[c]&&cfg[c].w&&Object.prototype.hasOwnProperty.call(cfg[c].w,p))return cfg[c].w[p];
@@ -140,7 +206,7 @@ function singlePy(c){
 function hasSinglePyOverride(c){return Boolean(cfg[c]&&typeof cfg[c].sp==='string'&&cfg[c].sp.trim()&&DB&&DB[c]&&cfg[c].sp.trim()!==DB[c].p[0]);}
 function activeEntries(c){
   if(!DB||!DB[c])return [];
-  if(!isPoly(c))return [{p:singlePy(c),w:wordsOf(c,DB[c].p[0])}];
+  if(!isPoly(c))return isSingleOn(c)?[{p:singlePy(c),w:wordsOf(c,DB[c].p[0])}]:[];
   return allPys(c).filter(p=>isOn(c,p)).map(p=>({p,w:wordsOf(c,p)}));
 }
 function setSinglePy(c,raw){
@@ -150,9 +216,17 @@ function setSinglePy(c,raw){
   else st.sp=py;
   saveCfg();updateCharUi(c);render();
 }
+function toggleSingleOn(c,val){
+  const next=typeof val==='boolean'?val:!isSingleOn(c);
+  const st=ensureCfg(c);
+  if(next)delete st.so;
+  else st.so=false;
+  saveCfg();updateCharUi(c,{type:'scb'});render();
+}
 function togglePy(c,p,val){
-  const next=typeof val==='boolean'?val:!isOn(c,p);
-  if(!next&&isOn(c,p)){
+  const curOn=isOn(c,p);
+  const next=typeof val==='boolean'?val:!curOn;
+  if(!isDictOnly()&&!next&&curOn){
     const onCount=allPys(c).filter(x=>isOn(c,x)).length;
     if(onCount<=1){
       updateCharUi(c,{type:'pycb',py:p});
@@ -161,6 +235,9 @@ function togglePy(c,p,val){
     }
   }
   const st=ensureCfg(c);
+  if(!isDictOnly()&&isPolyAllRawOff(c)){
+    allPys(c).forEach(x=>{st.on[x]=isOn(c,x);});
+  }
   st.on[p]=next;
   saveCfg();updateCharUi(c,{type:'pycb',py:p});render();
 }
@@ -187,6 +264,9 @@ function addCustomPy(c,raw){
   if(!py)return;
   const wasPoly=isPoly(c);
   const st=ensureCfg(c);
+  if(!isDictOnly()&&wasPoly&&isPolyAllRawOff(c)){
+    allPys(c).forEach(x=>{st.on[x]=isOn(c,x);});
+  }
   if(!DB[c].p.includes(py)&&!st.cp.includes(py)){
     st.cp.push(py);
     if(!Object.prototype.hasOwnProperty.call(st.w,py))st.w[py]=[];
@@ -201,7 +281,7 @@ function delCustomPy(c,py){
   if(Array.isArray(cfg[c].cp))cfg[c].cp=cfg[c].cp.filter(x=>x!==py);
   if(cfg[c].on)delete cfg[c].on[py];
   if(cfg[c].w)delete cfg[c].w[py];
-  if(isPoly(c)&&!allPys(c).some(x=>isOn(c,x))&&DB&&DB[c]){
+  if(!isDictOnly()&&isPoly(c)&&isPolyAllRawOff(c)&&DB&&DB[c]){
     ensureCfg(c).on[DB[c].p[0]]=true;
   }
   saveCfg();
@@ -217,9 +297,233 @@ function cell(s,upto,mode,mm){
     if(f)g+='<path d="'+p+'" fill="'+f+'"/>';});
   return '<div class="cell" style="width:'+mm+'mm;height:'+mm+'mm"><svg viewBox="0 0 1024 1024" width="100%" height="100%">'+grid+'<g transform="translate(0,900) scale(1,-1)">'+g+'</g></svg></div>';
 }
+function dictCellHtml(cObj,mm){
+  const sMm=mm.toFixed(2);
+  if(cObj.isTarget){
+    return '<div class="cell" data-role="target" data-char="'+esc(cObj.ch)+'" style="width:'+sMm+'mm;height:'+sMm+'mm"><svg viewBox="0 0 1024 1024" width="100%" height="100%">'+grid+'</svg></div>';
+  }
+  if(cObj.inDb){
+    let g='';
+    DB[cObj.ch].s.forEach(p=>{g+='<path d="'+p+'" fill="#d6d6d6"/>';});
+    return '<div class="cell" data-role="partner" data-char="'+esc(cObj.ch)+'" data-fallback="0" style="width:'+sMm+'mm;height:'+sMm+'mm"><svg viewBox="0 0 1024 1024" width="100%" height="100%">'+grid+'<g transform="translate(0,900) scale(1,-1)">'+g+'</g></svg></div>';
+  }
+  return '<div class="cell" data-role="partner" data-char="'+esc(cObj.ch)+'" data-fallback="1" style="width:'+sMm+'mm;height:'+sMm+'mm"><svg viewBox="0 0 1024 1024" width="100%" height="100%">'+grid+'<text x="512" y="525" text-anchor="middle" dominant-baseline="central" fill="#d6d6d6" font-size="760" font-family=\'"Kaiti SC","KaiTi","STKaiti","Songti SC",serif\'>'+esc(cObj.ch)+'</text></svg></div>';
+}
 function chars(){const t=$('inp').value.match(/[\u4e00-\u9fff]/g)||[];return [...new Set(t)];}
+function findPartnerContextPy(word,ci){
+  const ch=word&&word[ci];
+  if(!ch||!DB||!DB[ch])return '';
+  const fallback=()=>{
+    const ae=activeEntries(ch);
+    if(ae.length)return ae[0].p;
+    const defP=allPys(ch).find(p=>isDefOn(ch,p));
+    return defP||singlePy(ch);
+  };
+  if(word.length<2||!isPoly(ch))return fallback();
+  const all=allPys(ch);
+  const onList=all.filter(p=>isOn(ch,p));
+  const pref=onList.length?onList:all.filter(p=>isDefOn(ch,p));
+  const ordered=[...pref,...all.filter(p=>!pref.includes(p))];
+  const lists=ordered.map(p=>({p,ws:wordsOf(ch,p)}));
+  for(const {p,ws} of lists){if(ws.includes(word))return p;}
+  let bestPy='',bestLen=0;
+  for(const {p,ws} of lists){
+    for(const w of ws){
+      if(w.length<2||w.length<=bestLen)continue;
+      let pos=word.indexOf(w);
+      while(pos!==-1){
+        if(pos<=ci&&ci<pos+w.length){bestLen=w.length;bestPy=p;break;}
+        pos=word.indexOf(w,pos+1);
+      }
+    }
+  }
+  if(bestPy)return bestPy;
+  for(const {p,ws} of lists){
+    if(ws.some(w=>w.length>=2&&w.includes(word)))return p;
+  }
+  const variants=[];
+  if(word.length===4&&word[0]===word[1]&&word[2]===word[3]&&word[0]!==word[2]){
+    variants.push(word[0]+word[2]);
+  }
+  const prev=word[ci-1],next=word[ci+1],prev2=word[ci-2],next2=word[ci+2];
+  const isRedup=next===ch||prev===ch||
+    ((next==='一'||next==='不'||next==='了')&&next2===ch)||
+    ((prev==='一'||prev==='不'||prev==='了')&&prev2===ch);
+  if(isRedup)variants.push(ch+'一'+ch,ch+ch,ch+'不'+ch);
+  if(variants.length){
+    for(const {p,ws} of lists){
+      if(ws.some(w=>w.length>=2&&variants.some(v=>w===v||w.includes(v)||v.includes(w))))return p;
+    }
+  }
+  return fallback();
+}
+function resolveDictCellPy(target,targetPy,word,ci){
+  const ch=word&&word[ci];
+  if(!ch)return '';
+  if(ch===target){
+    if(word==='数数'&&target==='数'&&targetPy==='shǔ'&&ci===1&&DB&&DB[ch]&&allPys(ch).includes('shù')){
+      return 'shù';
+    }
+    return targetPy;
+  }
+  if(!DB||!DB[ch])return '';
+  const key=partnerPyKey(target,targetPy,word,ci);
+  const ov=partnerPy[key];
+  if(typeof ov==='string'&&ov&&allPys(ch).includes(ov))return ov;
+  return findPartnerContextPy(word,ci);
+}
+function cyclePartnerPy(target,targetPy,word,ci){
+  const ch=word&&word[ci];
+  if(!ch||ch===target||!DB||!DB[ch])return '';
+  const pys=allPys(ch);
+  if(pys.length<=1)return resolveDictCellPy(target,targetPy,word,ci);
+  const curPy=resolveDictCellPy(target,targetPy,word,ci);
+  const idx=pys.indexOf(curPy);
+  const nextPy=pys[(idx+1)%pys.length];
+  const key=partnerPyKey(target,targetPy,word,ci);
+  const autoPy=findPartnerContextPy(word,ci);
+  if(nextPy===autoPy)delete partnerPy[key];
+  else partnerPy[key]=nextPy;
+  savePartnerPy();
+  render();
+  return nextPy;
+}
+function collectDictItems(pageChars){
+  const items=[];
+  pageChars.forEach(c=>{
+    const entries=activeEntries(c);
+    if(!entries.length)return;
+    let added=0;
+    entries.forEach(e=>{
+      (e.w||[]).forEach(rawW=>{
+        const w=(String(rawW||'').match(/[\u3400-\u9fff\uf900-\ufaff]/g)||[]).join('');
+        if(!w)return;
+        items.push({target:c,targetPy:e.p,word:w});
+        added++;
+      });
+    });
+    if(added===0){
+      entries.forEach(e=>items.push({target:c,targetPy:e.p,word:c}));
+    }
+  });
+  return items;
+}
+function hashPageKey(pageIdx,items){
+  let h=(2166136261^pageIdx)>>>0;
+  for(let i=0;i<items.length;i++){
+    const s=items[i].target+':'+items[i].targetPy+':'+items[i].word;
+    for(let j=0;j<s.length;j++){
+      h^=s.charCodeAt(j);
+      h=Math.imul(h,16777619)>>>0;
+    }
+  }
+  return h>>>0;
+}
+function makeRng(seed){
+  let a=seed>>>0;
+  return ()=>{
+    a=(a+0x6d2b79f5)>>>0;
+    let t=Math.imul(a^(a>>>15),1|a);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+function shuffleDictItems(items,pageIdx){
+  const arr=items.slice();
+  const n=arr.length;
+  if(n<=1)return arr;
+  const rng=makeRng((shuffleSeed^hashPageKey(pageIdx,arr))>>>0);
+  for(let i=n-1;i>0;i--){
+    const j=Math.floor(rng()*(i+1));
+    const tmp=arr[i];arr[i]=arr[j];arr[j]=tmp;
+  }
+  const hasAdj=list=>{
+    for(let i=1;i<list.length;i++)if(list[i].target===list[i-1].target)return true;
+    return false;
+  };
+  const canSwap=(list,i,j)=>{
+    const ti=list[i].target,tj=list[j].target;
+    if(ti===tj)return false;
+    const at=k=>k===i?tj:(k===j?ti:list[k].target);
+    const okAt=k=>(k<=0||at(k)!==at(k-1))&&(k>=list.length-1||at(k)!==at(k+1));
+    return okAt(i)&&okAt(j);
+  };
+  for(let pass=0;pass<2&&hasAdj(arr);pass++){
+    for(let i=1;i<n;i++){
+      if(arr[i].target!==arr[i-1].target)continue;
+      let swapped=false;
+      for(let j=i+1;j<n;j++){
+        if(canSwap(arr,i,j)){const tmp=arr[i];arr[i]=arr[j];arr[j]=tmp;swapped=true;break;}
+      }
+      if(!swapped){
+        for(let j=0;j<i-1;j++){
+          if(canSwap(arr,i,j)){const tmp=arr[i];arr[i]=arr[j];arr[j]=tmp;break;}
+        }
+      }
+    }
+    for(let i=n-2;i>=0;i--){
+      if(arr[i].target!==arr[i+1].target)continue;
+      for(let j=i-1;j>=0;j--){
+        if(canSwap(arr,i,j)){const tmp=arr[i];arr[i]=arr[j];arr[j]=tmp;break;}
+      }
+    }
+  }
+  if(hasAdj(arr)){
+    const buckets=new Map();
+    arr.forEach(it=>{
+      if(!buckets.has(it.target))buckets.set(it.target,[]);
+      buckets.get(it.target).push(it);
+    });
+    let maxC=0;
+    buckets.forEach(b=>{if(b.length>maxC)maxC=b.length;});
+    if(maxC<=Math.ceil(n/2)){
+      const res=[];
+      let prev='';
+      while(res.length<n){
+        let bestLen=0,cands=[];
+        buckets.forEach((b,t)=>{
+          if(!b.length||t===prev)return;
+          if(b.length>bestLen){bestLen=b.length;cands=[t];}
+          else if(b.length===bestLen)cands.push(t);
+        });
+        if(!cands.length)break;
+        const pick=cands[Math.floor(rng()*cands.length)];
+        res.push(buckets.get(pick).pop());
+        prev=pick;
+      }
+      if(res.length===n)return res;
+    }
+  }
+  return arr;
+}
+function dictOrderSig(ok,per){
+  return buildPagePlan(ok,per).map(pl=>pl.dictItems.map(x=>x.target+':'+x.word).join(',')).join('|');
+}
+function reshuffleDict(){
+  const {ok,per}=cur();
+  const prevSig=ok.length?dictOrderSig(ok,per):'';
+  let next=shuffleSeed;
+  for(let tries=0;tries<12;tries++){
+    let cand;
+    if(typeof crypto!=='undefined'&&crypto.getRandomValues){
+      const a=new Uint32Array(1);
+      crypto.getRandomValues(a);
+      cand=a[0]>>>0;
+    }else{
+      cand=(Math.floor(Math.random()*0x100000000)>>>0);
+    }
+    if(cand===shuffleSeed)continue;
+    shuffleSeed=cand;
+    next=cand;
+    if(!prevSig||dictOrderSig(ok,per)!==prevSig)break;
+  }
+  render();
+  return next;
+}
 function buildWordRow(c,p,showChar){
-  const row=document.createElement('div');row.className=showChar?'srow':'pw-row';row.dataset.char=c;row.dataset.py=p;
+  const dictSingle=showChar&&isDictOnly();
+  const sOn=dictSingle?isSingleOn(c):true;
+  const row=document.createElement('div');row.className=showChar?('srow'+(sOn?'':' off')):'pw-row';row.dataset.char=c;row.dataset.py=p;
   if(showChar){
     const ch=document.createElement('span');ch.className='pchar';ch.textContent=c;
     row.appendChild(ch);
@@ -239,11 +543,25 @@ function buildWordRow(c,p,showChar){
       };
       pyLab.replaceWith(pi);pi.focus();pi.select();
     };
-    row.appendChild(pyLab);
-    if(hasSinglePyOverride(c)){
-      const rx=document.createElement('button');rx.type='button';rx.className='px';rx.textContent='×';rx.title='恢复默认读音';
-      rx.onclick=()=>setSinglePy(c,'');
-      row.appendChild(rx);
+    if(dictSingle){
+      const tag=document.createElement('span');tag.className='stag'+(sOn?' on':'');
+      const scb=document.createElement('input');scb.type='checkbox';scb.className='s-cb';scb.checked=sOn;
+      scb.title='勾选参与默写，反选跳过该字';scb.setAttribute('aria-label',c+' 参与默写');
+      scb.onchange=()=>toggleSingleOn(c,scb.checked);
+      tag.append(scb,pyLab);
+      if(hasSinglePyOverride(c)){
+        const rx=document.createElement('button');rx.type='button';rx.className='px';rx.textContent='×';rx.title='恢复默认读音';
+        rx.onclick=()=>setSinglePy(c,'');
+        tag.appendChild(rx);
+      }
+      row.appendChild(tag);
+    }else{
+      row.appendChild(pyLab);
+      if(hasSinglePyOverride(c)){
+        const rx=document.createElement('button');rx.type='button';rx.className='px';rx.textContent='×';rx.title='恢复默认读音';
+        rx.onclick=()=>setSinglePy(c,'');
+        row.appendChild(rx);
+      }
     }
   }else{
     pyLab.className='pw-py';pyLab.textContent=p;
@@ -306,6 +624,7 @@ function buildPolyCard(c){
   card.appendChild(top);
 
   const onPys=pys.filter(p=>isOn(c,p));
+  if(!onPys.length)card.classList.add('off');
   if(onPys.length){
     const wl=document.createElement('div');wl.className='pw-list';
     onPys.forEach(p=>wl.appendChild(buildWordRow(c,p,false)));
@@ -320,9 +639,14 @@ function updateSinglesSummary(){
   const missingCount=singles.filter(c=>wordsOf(c,DB[c].p[0]).length===0).length;
   const sum=det.querySelector('summary');
   if(sum){
-    sum.textContent=missingCount>0
-      ?('普通汉字组词设置（'+singles.length+' 字，其中 '+missingCount+' 字暂无推荐组词；点击拼音可改音）')
-      :('普通汉字组词设置（'+singles.length+' 字，点击展开增删组词或改音）');
+    if(isDictOnly()){
+      const onCount=singles.filter(c=>isSingleOn(c)).length;
+      sum.textContent='普通汉字默写与组词设置（已选 '+onCount+' / '+singles.length+' 字，反选拼音可跳过已掌握的字）';
+    }else{
+      sum.textContent=missingCount>0
+        ?('普通汉字组词设置（'+singles.length+' 字，其中 '+missingCount+' 字暂无推荐组词；点击拼音可改音）')
+        :('普通汉字组词设置（'+singles.length+' 字，点击展开增删组词或改音）');
+    }
   }
 }
 function updateCharUi(c,focus){
@@ -348,6 +672,9 @@ function updateCharUi(c,focus){
     if(focus&&focus.type==='wadd'){
       const wi=row.querySelector('.wadd');
       if(wi)wi.focus();
+    }else if(focus&&focus.type==='scb'){
+      const scb=row.querySelector('.s-cb');
+      if(scb)scb.focus();
     }
   }
 }
@@ -362,7 +689,7 @@ function buildPoly(){
   if(singles.length){
     const missingCount=singles.filter(c=>wordsOf(c,DB[c].p[0]).length===0).length;
     const det=document.createElement('details');det.className='sbox';
-    const initOpen=singlesOpen!==null?singlesOpen:missingCount>0;
+    const initOpen=singlesOpen!==null?singlesOpen:(isDictOnly()||missingCount>0);
     det.open=initOpen;
     det.addEventListener('toggle',()=>{if(det.open!==initOpen||singlesOpen!==null)singlesOpen=det.open;});
     const sum=document.createElement('summary');
@@ -392,6 +719,116 @@ function fitHeads(){
   });
 }
 const PAGE={W:210,H:297,PAD_X:13.25,PAD_Y:10,TOP_H:8,CONTENT_W:183.5,BODY_H:269,CELL:17,BORDER:0.35,COLS:11,WRAP_MIN:15,BLANK_TOP_GAP:15,BLANK_TOP_MIN:11,BLANK_ROW_GAP:13,BLANK_ROW_MIN:10,MAX_BLANK_ROWS:5};
+const DICT_BASE={CELL:17,PY_H:6.2,PY_PT:11.5,WORD_GAP:7.0,ROW_GAP:6.5,MIN_ROW_GAP:2.0,MIN_WORD_GAP:4.5};
+function wordW(len,cellMm){return len*cellMm-Math.max(0,len-1)*PAGE.BORDER;}
+function packDictChunks(prepared,cellMm,wordGap){
+  const pitch=cellMm-PAGE.BORDER;
+  const maxCols=Math.max(1,Math.floor((PAGE.CONTENT_W-PAGE.BORDER)/pitch));
+  const chunks=[];
+  prepared.forEach(it=>{
+    for(let s=0;s<it.chars.length;s+=maxCols){
+      const slice=it.chars.slice(s,s+maxCols);
+      chunks.push({target:it.target,targetPy:it.targetPy,word:it.word,chars:slice,w:wordW(slice.length,cellMm)});
+    }
+  });
+  const rows=[];
+  let cur=[],curX=0;
+  chunks.forEach(ch=>{
+    const nx=cur.length?(curX+wordGap+ch.w):ch.w;
+    if(cur.length&&nx>PAGE.CONTENT_W+0.01){
+      rows.push(cur);
+      cur=[];curX=0;
+    }
+    const x=cur.length?(curX+wordGap):0;
+    cur.push({...ch,x});
+    curX=x+ch.w;
+  });
+  if(cur.length)rows.push(cur);
+  return rows;
+}
+function layoutDictPage(items){
+  if(!items||!items.length){
+    return {cellMm:DICT_BASE.CELL,pyH:DICT_BASE.PY_H,pyPt:DICT_BASE.PY_PT,wordGap:DICT_BASE.WORD_GAP,rowGap:DICT_BASE.ROW_GAP,rows:[],items:[]};
+  }
+  const prepared=items.map(it=>({
+    ...it,
+    chars:Array.from(it.word,(ch,ci)=>({
+      ch,ci,
+      isTarget:ch===it.target,
+      inDb:Boolean(DB&&DB[ch]),
+      py:resolveDictCellPy(it.target,it.targetPy,it.word,ci),
+      polyPartner:ch!==it.target&&Boolean(DB&&DB[ch]&&allPys(ch).length>1)
+    }))
+  }));
+  const tryFit=(cellMm,pyH,pyPt,wordGap,maxRowGap,minRowGap)=>{
+    const packed=packDictChunks(prepared,cellMm,wordGap);
+    const n=packed.length;
+    const rowH=pyH+cellMm;
+    if(n===0)return null;
+    if(n===1){
+      if(rowH<=PAGE.BODY_H+1e-6)return {cellMm,pyH,pyPt,wordGap,rowGap:0,packed};
+      return null;
+    }
+    const slack=(PAGE.BODY_H-n*rowH)/(n-1);
+    if(slack>=minRowGap-1e-6){
+      const rowGap=Math.max(minRowGap,Math.min(maxRowGap,Math.floor(slack*10)/10));
+      if(n*rowH+(n-1)*rowGap<=PAGE.BODY_H+1e-6){
+        return {cellMm,pyH,pyPt,wordGap,rowGap,packed};
+      }
+    }
+    return null;
+  };
+  let best=tryFit(DICT_BASE.CELL,DICT_BASE.PY_H,DICT_BASE.PY_PT,DICT_BASE.WORD_GAP,DICT_BASE.ROW_GAP,DICT_BASE.MIN_ROW_GAP);
+  if(!best){
+    for(const wg of [6.0,5.2,4.5]){
+      best=tryFit(DICT_BASE.CELL,DICT_BASE.PY_H,DICT_BASE.PY_PT,wg,DICT_BASE.ROW_GAP,DICT_BASE.MIN_ROW_GAP);
+      if(best)break;
+    }
+  }
+  if(!best){
+    for(let cm=16.5;cm>=4.0;cm=Math.round((cm-0.5)*10)/10){
+      const sc=cm/DICT_BASE.CELL;
+      const pyH=Math.max(2.6,Math.round(DICT_BASE.PY_H*sc*10)/10);
+      const pyPt=Math.max(5.5,Math.round(DICT_BASE.PY_PT*sc*10)/10);
+      const maxRg=Math.min(DICT_BASE.ROW_GAP,Math.max(1.2,Math.round(DICT_BASE.ROW_GAP*sc*10)/10));
+      const minRg=Math.max(1.0,Math.round(DICT_BASE.MIN_ROW_GAP*sc*10)/10);
+      const wgList=[Math.min(DICT_BASE.MIN_WORD_GAP,Math.max(2.0,Math.round(DICT_BASE.MIN_WORD_GAP*sc*10)/10))];
+      if(cm>=12)wgList.unshift(DICT_BASE.MIN_WORD_GAP);
+      for(const wg of wgList){
+        best=tryFit(cm,pyH,pyPt,wg,maxRg,minRg);
+        if(best)break;
+      }
+      if(best)break;
+    }
+  }
+  if(!best){
+    const packed=packDictChunks(prepared,4.0,1.5);
+    const n=packed.length;
+    const pyH=2.4,cellMm=4.0,rowH=pyH+cellMm;
+    const rg=n>1?Math.max(0,Math.min(1.5,Math.floor(((PAGE.BODY_H-n*rowH)/(n-1))*10)/10)):0;
+    best={cellMm,pyH,pyPt:5.0,wordGap:1.5,rowGap:rg,packed};
+  }
+  let y=PAGE.PAD_Y+PAGE.TOP_H;
+  const rowH=best.pyH+best.cellMm;
+  const rows=best.packed.map((rowItems,rIdx)=>{
+    const gapAfter=rIdx<best.packed.length-1?best.rowGap:0;
+    const row={y,cellY:y+best.pyH,items:rowItems,gapAfter};
+    y+=rowH+gapAfter;
+    return row;
+  });
+  return {cellMm:best.cellMm,pyH:best.pyH,pyPt:best.pyPt,wordGap:best.wordGap,rowGap:best.rowGap,rows,items};
+}
+function buildPagePlan(ok,per,mode){
+  const m=mode||curMode();
+  const list=m==='dictation'?ok.filter(c=>activeEntries(c).length>0):ok;
+  const plans=[];
+  for(let i=0,pIdx=0;i<list.length;i+=per,pIdx++){
+    const pageChars=list.slice(i,i+per);
+    const dictItems=shuffleDictItems(collectDictItems(pageChars),pIdx);
+    plans.push({pIdx,pageChars,dictItems});
+  }
+  return plans;
+}
 function localDateParts(d=new Date()){
   const y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate();
   const pad=n=>String(n).padStart(2,'0');
@@ -399,8 +836,8 @@ function localDateParts(d=new Date()){
   return {ymd:y+'-'+pad(m)+'-'+pad(day),label:y+'年'+m+'月'+day+'日（'+wk+'）'};
 }
 function selectedDateInfo(){
-  const blankEl=$('dtBlank'),dtEl=$('dt');
-  if(blankEl&&blankEl.checked)return {blank:true,ymd:localDateParts().ymd,label:''};
+  const autoEl=$('dtAuto'),dtEl=$('dt');
+  if(autoEl&&!autoEl.checked)return {blank:true,ymd:localDateParts().ymd,label:''};
   const v=dtEl?dtEl.value:'';
   if(/^\d{4}-\d{2}-\d{2}$/.test(v)){
     const [y,m,day]=v.split('-').map(Number);
@@ -497,41 +934,75 @@ function layoutSheet(items,per){
   }
   return {blocks,blankYs,blankTopGap,blankRowGap};
 }
+function renderFrontSheetHtml(pageItems,per,gh,pIdx,topRight,emptyRowHtml){
+  const lay=layoutSheet(pageItems,per);
+  let out='<div class="sheet" data-sheet="front" data-page="'+pIdx+'"><div class="top"><span>汉字笔顺练习</span>'+topRight+'</div>';
+  lay.blocks.forEach(b=>{
+    let r1=cell(b.s,0,'full',b.w);
+    for(let k=1;k<b.row1;k++)r1+=cell(b.s,k,'step',b.w);
+    let stepsHtml='<div class="row">'+r1+'</div>';
+    if(b.wrapped){
+      let r2='';
+      for(let k=b.row1;k<=b.n;k++)r2+=cell(b.s,k,'step',b.w);
+      stepsHtml+='<div class="row steps-r2">'+r2+'</div>';
+    }
+    let bl='';for(let k=0;k<PAGE.COLS;k++)bl+=cell(b.s,0,k<gh?'ghost':'none',PAGE.CELL);
+    const mb=b.gapAfter?('margin-bottom:'+b.gapAfter.toFixed(2)+'mm'):'';
+    out+='<div style="'+mb+'" data-char="'+esc(b.c)+'" data-wrapped="'+(b.wrapped?'1':'0')+'"><div class="head" style="height:'+b.headH+'mm">'+headHtml(b.c)+'<span class="meta">'+esc(b.c)+' · '+b.n+' 画</span></div><div class="steps-wrap" style="margin-bottom:'+b.stepGap+'mm">'+stepsHtml+'</div><div class="row">'+bl+'</div></div>';
+  });
+  if(lay.blankYs.length){
+    out+='<div class="blank-area" style="margin-top:'+lay.blankTopGap.toFixed(2)+'mm">';
+    for(let r=0;r<lay.blankYs.length;r++)out+='<div class="row blank-row" style="margin-bottom:'+lay.blankRowGap.toFixed(2)+'mm">'+emptyRowHtml+'</div>';
+    out+='</div>';
+  }
+  out+='</div>';
+  return out;
+}
+function renderBackSheetHtml(dictItems,pIdx,topRight){
+  const lay=layoutDictPage(dictItems);
+  const st='--cm:'+lay.cellMm.toFixed(2)+'mm;--pyh:'+lay.pyH.toFixed(2)+'mm;--pypt:'+lay.pyPt.toFixed(2)+'pt';
+  let out='<div class="sheet" data-sheet="back" data-page="'+pIdx+'" style="'+st+'"><div class="top"><span>生字默写练习</span>'+topRight+'</div>';
+  lay.rows.forEach((r,rIdx)=>{
+    const rmb=r.gapAfter?('margin-bottom:'+r.gapAfter.toFixed(2)+'mm'):'';
+    out+='<div class="drow" style="'+rmb+'" data-row="'+rIdx+'">';
+    r.items.forEach((it,iIdx)=>{
+      const gmr=iIdx<r.items.length-1?('margin-right:'+lay.wordGap.toFixed(2)+'mm'):'';
+      let pCells='',cells='';
+      it.chars.forEach(cObj=>{
+        const cls='wpy'+(cObj.polyPartner?' poly-py':'');
+        const extra=cObj.polyPartner?' role="button" tabindex="0" title="点击切换多音搭档字读音"':'';
+        pCells+='<div class="wpy-cell"><span class="'+cls+'" data-target="'+esc(it.target)+'" data-tpy="'+esc(it.targetPy)+'" data-word="'+esc(it.word)+'" data-ci="'+cObj.ci+'" data-char="'+esc(cObj.ch)+'"'+extra+'>'+esc(cObj.py)+'</span></div>';
+        cells+=dictCellHtml(cObj,lay.cellMm);
+      });
+      out+='<div class="wgrp" style="'+gmr+'" data-target="'+esc(it.target)+'" data-tpy="'+esc(it.targetPy)+'" data-word="'+esc(it.word)+'"><div class="wpy-row">'+pCells+'</div><div class="row">'+cells+'</div></div>';
+    });
+    out+='</div>';
+  });
+  out+='</div>';
+  return out;
+}
 function render(){
   if(!DB)return;
   const all=chars(),ok=all.filter(c=>DB[c]),bad=all.filter(c=>!DB[c]);
   $('msg').textContent=bad.length?('暂无数据：'+bad.join(' ')):'';
+  const mode=curMode();
   const per=+$('per').value,gh=+$('ghost').value;
   const dtInfo=selectedDateInfo();
   const topRight=topRightHtml(dtInfo);
   let emptyRowHtml='';for(let k=0;k<PAGE.COLS;k++)emptyRowHtml+=cell([],0,'none',PAGE.CELL);
+  const plans=buildPagePlan(ok,per);
   let out='';
-  for(let i=0;i<ok.length;i+=per){
-    const pageItems=ok.slice(i,i+per);
-    const lay=layoutSheet(pageItems,per);
-    out+='<div class="sheet"><div class="top"><span>汉字笔顺练习</span>'+topRight+'</div>';
-    lay.blocks.forEach(b=>{
-      let r1=cell(b.s,0,'full',b.w);
-      for(let k=1;k<b.row1;k++)r1+=cell(b.s,k,'step',b.w);
-      let stepsHtml='<div class="row">'+r1+'</div>';
-      if(b.wrapped){
-        let r2='';
-        for(let k=b.row1;k<=b.n;k++)r2+=cell(b.s,k,'step',b.w);
-        stepsHtml+='<div class="row steps-r2">'+r2+'</div>';
-      }
-      let bl='';for(let k=0;k<PAGE.COLS;k++)bl+=cell(b.s,0,k<gh?'ghost':'none',PAGE.CELL);
-      const mb=b.gapAfter?('margin-bottom:'+b.gapAfter.toFixed(2)+'mm'):'';
-      out+='<div style="'+mb+'" data-char="'+esc(b.c)+'" data-wrapped="'+(b.wrapped?'1':'0')+'"><div class="head" style="height:'+b.headH+'mm">'+headHtml(b.c)+'<span class="meta">'+esc(b.c)+' · '+b.n+' 画</span></div><div class="steps-wrap" style="margin-bottom:'+b.stepGap+'mm">'+stepsHtml+'</div><div class="row">'+bl+'</div></div>';
-    });
-    if(lay.blankYs.length){
-      out+='<div class="blank-area" style="margin-top:'+lay.blankTopGap.toFixed(2)+'mm">';
-      for(let r=0;r<lay.blankYs.length;r++)out+='<div class="row blank-row" style="margin-bottom:'+lay.blankRowGap.toFixed(2)+'mm">'+emptyRowHtml+'</div>';
-      out+='</div>';
+  plans.forEach(pl=>{
+    if(mode==='stroke'||mode==='duplex'){
+      out+=renderFrontSheetHtml(pl.pageChars,per,gh,pl.pIdx,topRight,emptyRowHtml);
     }
-    out+='</div>';
-  }
-  $('root').innerHTML=out||'<p style="text-align:center;opacity:.6">输入生字后这里会出现预览</p>';
-  fitHeads();
+    if(mode==='duplex'||mode==='dictation'){
+      out+=renderBackSheetHtml(pl.dictItems,pl.pIdx,topRight);
+    }
+  });
+  const emptyTip=(mode==='dictation'&&ok.length&&!plans.length)?'已反选全部读音，请勾选需要默写的字音':'输入生字后这里会出现预览';
+  $('root').innerHTML=out||'<p style="text-align:center;opacity:.6">'+emptyTip+'</p>';
+  if(mode==='stroke'||mode==='duplex')fitHeads();
   fit();
   try{localStorage.setItem('hz_in',$('inp').value);}catch(e){}
 }
@@ -682,6 +1153,48 @@ function buildPageStream(lay,gh,strokeCache,headNames,topName){
   });
   return ops.join('\n');
 }
+function buildDictPageStream(pageLay,strokeCache,pyNames,topName,fallbackMap){
+  const ops=[];
+  if(topName)ops.push(pdfPlaceImg(topName,PAGE.PAD_X,PAGE.PAD_Y,PAGE.CONTENT_W,PAGE.TOP_H));
+  pageLay.rows.forEach((r,idx)=>{
+    const pn=pyNames&&pyNames[idx];
+    if(pn)ops.push(pdfPlaceImg(pn,PAGE.PAD_X,r.y-HEAD_PAD_TOP,PAGE.CONTENT_W,pageLay.pyH+HEAD_PAD_TOP));
+  });
+  const X0=PAGE.PAD_X,cellMm=pageLay.cellMm,pitch=cellMm-PAGE.BORDER;
+  const innerMm=cellMm-2*PAGE.BORDER;
+  if(fallbackMap){
+    pageLay.rows.forEach(r=>{
+      r.items.forEach(it=>{
+        it.chars.forEach((cObj,ci)=>{
+          if(!cObj.isTarget&&!cObj.inDb&&fallbackMap[cObj.ch]){
+            ops.push(pdfPlaceImg(fallbackMap[cObj.ch],X0+it.x+ci*pitch+PAGE.BORDER,r.cellY+PAGE.BORDER,innerMm,innerMm));
+          }
+        });
+      });
+    });
+  }
+  ops.push('0.267 G '+pNum(PAGE.BORDER*PDF_PT)+' w [] 0 d');
+  const getSp=c=>{
+    let sp=strokeCache.get(c);
+    if(!sp){sp=DB[c].s.map(svgPathToPdf);strokeCache.set(c,sp);}
+    return sp;
+  };
+  pageLay.rows.forEach(r=>{
+    r.items.forEach(it=>{
+      it.chars.forEach((cObj,ci)=>{
+        const cx=X0+it.x+ci*pitch;
+        if(cObj.isTarget){
+          ops.push(pdfCellOps(cx,r.cellY,cellMm,[],0,'none'));
+        }else if(cObj.inDb){
+          ops.push(pdfCellOps(cx,r.cellY,cellMm,getSp(cObj.ch),0,'ghost'));
+        }else{
+          ops.push(pdfCellOps(cx,r.cellY,cellMm,[],0,'none'));
+        }
+      });
+    });
+  });
+  return ops.join('\n');
+}
 function measureHeadEntries(ctx,entries,pyBase,sc){
   let total=0;
   entries.forEach((e,idx)=>{
@@ -713,7 +1226,7 @@ async function canvasToFlateImage(cv,gray){
   }
   return {w,h,gray:Boolean(gray),data:await deflateBytes(raw)};
 }
-async function renderTopStrip(cv,dt){
+async function renderTopStrip(cv,dt,title){
   const w=Math.max(1,Math.round(PAGE.CONTENT_W*STRIP_MM));
   const h=Math.max(1,Math.round(PAGE.TOP_H*STRIP_MM));
   cv.width=w;cv.height=h;
@@ -722,7 +1235,7 @@ async function renderTopStrip(cv,dt){
   const y=(15.5-PAGE.PAD_Y)*STRIP_MM,ly=y+0.8*STRIP_MM;
   ctx.fillStyle='#555';ctx.strokeStyle='#555';ctx.lineWidth=.3*STRIP_MM;ctx.setLineDash([]);
   ctx.font=stripPt(11)+'px '+KT_FONT;ctx.textBaseline='alphabetic';ctx.textAlign='left';
-  ctx.fillText('汉字笔顺练习',0,y);
+  ctx.fillText(title||'汉字笔顺练习',0,y);
   const segs=dt.blank
     ?[{t:'姓名：'},{l:22},{t:'　日期：'},{l:11},{t:'年'},{l:6.5},{t:'月'},{l:6.5},{t:'日（'},{l:5.5},{t:'）'}]
     :[{t:'姓名：'},{l:22},{t:'　日期：'},{ul:dt.label,pad:1.2}];
@@ -782,6 +1295,47 @@ async function renderHeadStrip(cv,c,n,headH){
   }
   return canvasToFlateImage(cv,false);
 }
+async function renderDictPinyinStrip(cv,row,pageLay){
+  const w=Math.max(1,Math.round(PAGE.CONTENT_W*STRIP_MM));
+  const h=Math.max(1,Math.round((pageLay.pyH+HEAD_PAD_TOP)*STRIP_MM));
+  cv.width=w;cv.height=h;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='#222';
+  ctx.textAlign='center';ctx.textBaseline='alphabetic';
+  const cellMm=pageLay.cellMm,pitch=cellMm-PAGE.BORDER;
+  const padBot=Math.max(0.7,1.2*(cellMm/17));
+  const y=(HEAD_PAD_TOP+pageLay.pyH-padBot)*STRIP_MM;
+  const maxW=Math.max(2,(cellMm-0.8))*STRIP_MM;
+  const baseFs=stripPt(pageLay.pyPt);
+  const minFs=stripPt(Math.max(4.5,pageLay.pyPt*0.6));
+  row.items.forEach(it=>{
+    it.chars.forEach((cObj,ci)=>{
+      if(!cObj.py)return;
+      let fs=baseFs;
+      ctx.font=fs+'px Arial,"PingFang SC",sans-serif';
+      const tw=ctx.measureText(cObj.py).width;
+      if(tw>maxW&&tw>0){
+        fs=Math.max(minFs,fs*(maxW/tw));
+        ctx.font=fs+'px Arial,"PingFang SC",sans-serif';
+      }
+      ctx.fillText(cObj.py,(it.x+ci*pitch+cellMm/2)*STRIP_MM,y);
+    });
+  });
+  return canvasToFlateImage(cv,true);
+}
+async function renderFallbackCharImg(cv,ch,cellMm){
+  const innerMm=Math.max(1,cellMm-2*PAGE.BORDER);
+  const side=Math.max(1,Math.round(innerMm*STRIP_MM));
+  cv.width=side;cv.height=side;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,side,side);
+  ctx.fillStyle='#d6d6d6';
+  ctx.font=Math.round(side*0.74)+'px '+KT_FONT;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(ch,side/2,side*0.52);
+  return canvasToFlateImage(cv,true);
+}
 function makePdf(pages,sharedImages){
   const enc=new TextEncoder(),parts=[],offs=[];let len=0;
   const push=b=>{const u=typeof b==='string'?enc.encode(b):b;parts.push(u);len+=u.length;};
@@ -834,45 +1388,107 @@ function busy(b){$('bprint').disabled=b;$('bpdf').disabled=b;$('bmd').disabled=b
 function doPrint(){
   flushInput();
   const {ok}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
-  fitHeads();
+  if(curMode()==='dictation'&&!ok.some(c=>activeEntries(c).length>0)){$('msg').textContent='请至少勾选一个需要默写的读音';return;}
+  if(curMode()!=='dictation')fitHeads();
   window.print();
 }
 async function exportPdf(){
   flushInput();
   const {ok,per,gh}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
+  const mode=curMode();
+  if(mode==='dictation'&&!ok.some(c=>activeEntries(c).length>0)){$('msg').textContent='请至少勾选一个需要默写的读音';return;}
   busy(true);$('msg').textContent='正在生成 PDF…';
   const cv=document.createElement('canvas');
   try{
     const dt=selectedDateInfo();
-    const topImg=await renderTopStrip(cv,dt);
+    const sharedImages={};
+    if(mode==='stroke'||mode==='duplex')sharedImages.Top=await renderTopStrip(cv,dt,'汉字笔顺练习');
+    if(mode==='duplex'||mode==='dictation')sharedImages.TopBack=await renderTopStrip(cv,dt,'生字默写练习');
     const enc=new TextEncoder();
     const strokeCache=new Map();
     const pages=[];
-    const totalPages=Math.ceil(ok.length/per);
-    for(let i=0,pIdx=0;i<ok.length;i+=per,pIdx++){
-      if(totalPages>1)$('msg').textContent='正在生成 PDF（'+(pIdx+1)+'/'+totalPages+'）…';
-      const lay=layoutSheet(ok.slice(i,i+per),per);
-      const images={},headNames=[];
-      for(let j=0;j<lay.blocks.length;j++){
-        const b=lay.blocks[j];
-        const hn='H'+j;
-        headNames.push(hn);
-        images[hn]=await renderHeadStrip(cv,b.c,b.n,b.headH);
+    const plans=buildPagePlan(ok,per);
+    const totalPdfPages=plans.length*(mode==='duplex'?2:1);
+    let donePages=0;
+    for(let i=0;i<plans.length;i++){
+      const pl=plans[i];
+      if(mode==='stroke'||mode==='duplex'){
+        donePages++;
+        if(totalPdfPages>1)$('msg').textContent='正在生成 PDF（'+donePages+'/'+totalPdfPages+'）…';
+        const lay=layoutSheet(pl.pageChars,per);
+        const images={},headNames=[];
+        for(let j=0;j<lay.blocks.length;j++){
+          const b=lay.blocks[j];
+          const hn='H'+j;
+          headNames.push(hn);
+          images[hn]=await renderHeadStrip(cv,b.c,b.n,b.headH);
+        }
+        const rawStream=buildPageStream(lay,gh,strokeCache,headNames,'Top');
+        const stream=await deflateBytes(enc.encode(rawStream));
+        pages.push({stream,images});
+        await new Promise(r=>setTimeout(r,0));
       }
-      const rawStream=buildPageStream(lay,gh,strokeCache,headNames,'Top');
-      const stream=await deflateBytes(enc.encode(rawStream));
-      pages.push({stream,images});
-      await new Promise(r=>setTimeout(r,0));
+      if(mode==='duplex'||mode==='dictation'){
+        donePages++;
+        if(totalPdfPages>1)$('msg').textContent='正在生成 PDF（'+donePages+'/'+totalPdfPages+'）…';
+        const dLay=layoutDictPage(pl.dictItems);
+        const images={},pyNames=[],fallbackMap={};
+        let fbIdx=0;
+        for(let rIdx=0;rIdx<dLay.rows.length;rIdx++){
+          const r=dLay.rows[rIdx];
+          const pn='P'+rIdx;
+          pyNames.push(pn);
+          images[pn]=await renderDictPinyinStrip(cv,r,dLay);
+          for(const it of r.items){
+            for(const cObj of it.chars){
+              if(!cObj.isTarget&&!cObj.inDb&&!fallbackMap[cObj.ch]){
+                const fn='F'+(fbIdx++);
+                fallbackMap[cObj.ch]=fn;
+                images[fn]=await renderFallbackCharImg(cv,cObj.ch,dLay.cellMm);
+              }
+            }
+          }
+        }
+        const rawStream=buildDictPageStream(dLay,strokeCache,pyNames,'TopBack',fallbackMap);
+        const stream=await deflateBytes(enc.encode(rawStream));
+        pages.push({stream,images});
+        await new Promise(r=>setTimeout(r,0));
+      }
     }
     $('msg').textContent='';
-    await saveFile('汉字练习_'+today()+'.pdf',makePdf(pages,{Top:topImg}));
+    await saveFile(MODE_META[mode].filePrefix+'_'+today()+'.pdf',makePdf(pages,sharedImages));
   }catch(e){$('msg').textContent='生成失败：'+(e.message||e);}
   finally{cv.width=0;cv.height=0;busy(false);}
 }
 function escMd(s){return String(s).replace(/\|/g,'\\|');}
+function formatDictItemMd(it){
+  const pys=Array.from(it.word,(_,ci)=>resolveDictCellPy(it.target,it.targetPy,it.word,ci)).filter(Boolean).join(' ');
+  const cloze=Array.from(it.word,ch=>ch===it.target?'（　）':ch).join('');
+  return pys+'：'+cloze;
+}
+function buildDictPagesMd(plans){
+  let out='';
+  plans.forEach((pl,idx)=>{
+    if(plans.length>1)out+='### 第 '+(idx+1)+' 页\n\n';
+    pl.dictItems.forEach((it,j)=>{
+      out+=(j+1)+'. '+formatDictItemMd(it)+'\n';
+    });
+    if(idx<plans.length-1)out+='\n';
+  });
+  return out;
+}
 function buildMd(){
   flushInput();
-  const {ok}=cur();
+  const {ok,per}=cur();
+  const mode=curMode();
+  const dt=selectedDateInfo();
+  const dtLabel=dt.blank?localDateParts().label:dt.label;
+  if(mode==='dictation'){
+    const plans=buildPagePlan(ok,per);
+    let m='# 生字默写练习\n\n'+buildDictPagesMd(plans);
+    m+='\n生成日期：'+dtLabel+'\n';
+    return m;
+  }
   let m='# 生字练习表\n\n生字：'+ok.map(c=>{
     const pys=activeEntries(c).map(e=>e.p).join(' / ');
     return c+(pys?'（'+pys+'）':'');
@@ -884,24 +1500,56 @@ function buildMd(){
     const wdCol=escMd(entries.filter(e=>e.w.length).map(e=>(showPrefix?e.p+'：':'')+e.w.join('、')).join('；'));
     m+='| '+(i+1)+' | '+c+' | '+pyCol+' | '+wdCol+' | '+DB[c].s.length+' |\n';
   });
-  const dt=selectedDateInfo();
-  m+='\n生成日期：'+(dt.blank?localDateParts().label:dt.label)+'\n';
+  if(mode==='duplex'){
+    const plans=buildPagePlan(ok,per);
+    m+='\n## 反面默写练习\n\n'+buildDictPagesMd(plans);
+  }
+  m+='\n生成日期：'+dtLabel+'\n';
   return m;
 }
 async function exportMd(){
   flushInput();
   const {ok}=cur();if(!ok.length){$('msg').textContent='请先输入生字';return;}
-  await saveFile('汉字练习_'+today()+'.md',new Blob([buildMd()],{type:'text/markdown'}));
+  if(curMode()==='dictation'&&!ok.some(c=>activeEntries(c).length>0)){$('msg').textContent='请至少勾选一个需要默写的读音';return;}
+  await saveFile(MODE_META[curMode()].filePrefix+'_'+today()+'.md',new Blob([buildMd()],{type:'text/markdown'}));
 }
-addEventListener('resize',()=>{fitHeads();fit();});
-addEventListener('orientationchange',()=>setTimeout(()=>{fitHeads();fit();},120));
+addEventListener('resize',()=>{if(curMode()!=='dictation')fitHeads();fit();});
+addEventListener('orientationchange',()=>setTimeout(()=>{if(curMode()!=='dictation')fitHeads();fit();},120));
 addEventListener('afterprint',fit);
+$('root').addEventListener('click',e=>{
+  const el=e.target.closest('.poly-py');
+  if(!el)return;
+  const ci=Number(el.dataset.ci);
+  if(el.dataset.target&&el.dataset.word&&Number.isInteger(ci)){
+    cyclePartnerPy(el.dataset.target,el.dataset.tpy||'',el.dataset.word,ci);
+  }
+});
+$('root').addEventListener('keydown',e=>{
+  if(e.key!=='Enter'&&e.key!==' ')return;
+  const el=e.target.closest('.poly-py');
+  if(!el)return;
+  e.preventDefault();
+  const ci=Number(el.dataset.ci);
+  if(el.dataset.target&&el.dataset.word&&Number.isInteger(ci)){
+    cyclePartnerPy(el.dataset.target,el.dataset.tpy||'',el.dataset.word,ci);
+  }
+});
 $('inp').oninput=()=>{if(inpTimer)clearTimeout(inpTimer);inpTimer=setTimeout(()=>{inpTimer=null;syncFromInput();},150);};
+$('mode').onchange=()=>{
+  $('msg').textContent='';
+  syncModeUi();
+  try{localStorage.setItem(MODE_KEY,curMode());}catch(e){}
+  buildPoly();
+  render();
+};
 $('per').onchange=render;$('ghost').onchange=render;
-$('dt').onchange=()=>{if($('dt').value)$('dtBlank').checked=false;else $('dtBlank').checked=true;render();};
-$('dtBlank').onchange=()=>{
-  if(!$('dtBlank').checked&&!$('dt').value)$('dt').value=localDateParts().ymd;
-  $('dt').disabled=$('dtBlank').checked;
+$('dt').onchange=()=>{
+  if(!$('dt').value){$('dtAuto').checked=false;syncDateUi();}
+  render();
+};
+$('dtAuto').onchange=()=>{
+  if($('dtAuto').checked&&!$('dt').value)$('dt').value=localDateParts().ymd;
+  syncDateUi();
   render();
 };
 setTimeout(()=>{if(!DB&&!$('msg').textContent.includes('失败'))$('msg').textContent='字库 20 秒还没加载出来：请刷新重试，或换 Safari / Chrome 打开链接。';},20000);
@@ -911,7 +1559,10 @@ setTimeout(()=>{if(!DB&&!$('msg').textContent.includes('失败'))$('msg').textCo
     DB=await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).json();
   }catch(e){$('msg').textContent='字库加载失败，请换用较新的浏览器（Safari 16.4+ / Chrome）。';return;}
   loadCfg();
+  loadUiState();
+  syncModeUi();
   $('dt').value=localDateParts().ymd;
+  syncDateUi();
   let v='树桥数欢园种活极洗点';
   try{v=localStorage.getItem('hz_in')||v;}catch(e){}
   $('inp').value=v;$('msg').textContent='';

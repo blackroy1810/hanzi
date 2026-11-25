@@ -36,6 +36,7 @@ assert.ok(srcHtml.includes('Modification Notice (APL Section 2a/2b') && srcHtml.
 
 // jsdom 没有 DecompressionStream / CompressionStream / Blob.stream，这里用 Node 的 zlib 代替
 const dom = new JSDOM(srcHtml, {
+  url: 'https://hanzi.local/',
   runScripts: 'dangerously',
   pretendToBeVisual: true,
   virtualConsole: vc,
@@ -93,21 +94,33 @@ async function runTests(w, d) {
     assert.strictEqual(d.querySelectorAll('.sheet').length, 2, '默认 10 个字、每页 6 个，应有 2 页');
     assert.ok(d.querySelectorAll('#poly .pcard').length >= 2, '应出现多音字卡片（数、种等）');
 
-    // 0. 日期年月日+星期、手填切换与下划线结构检查
+    // 0. 日期年月日+星期、自动日期前置勾选框切换与下划线结构检查
+    const dtAuto = d.getElementById('dtAuto');
+    const dtInput = d.getElementById('dt');
+    assert.ok(dtAuto && dtAuto.checked, '自动日期勾选框默认应勾选');
+    assert.strictEqual(dtInput.style.display, '', '勾选自动日期时日期选择器应显示');
     const dtValEl = d.querySelector('.sheet .top-r .dt-val');
     assert.ok(dtValEl && /^\d{4}年\d{1,2}月\d{1,2}日（[日一二三四五六]）$/.test(dtValEl.textContent), '默认页眉应自动填写年月日及星期：' + (dtValEl && dtValEl.textContent));
-    const dtInput = d.getElementById('dt');
     dtInput.value = '2026-11-24';
     dtInput.dispatchEvent(new w.Event('change'));
     assert.strictEqual(d.querySelector('.sheet .top-r .dt-val').textContent, '2026年11月24日（二）', '切换日期选择器应同步更新年月日与星期');
-    const dtBlank = d.getElementById('dtBlank');
-    dtBlank.checked = true;
-    dtBlank.dispatchEvent(new w.Event('change'));
+    dtAuto.checked = false;
+    dtAuto.dispatchEvent(new w.Event('change'));
+    assert.strictEqual(dtInput.style.display, 'none', '取消勾选自动日期应隐藏日期选择器');
     const topRText = d.querySelector('.sheet .top-r').textContent;
-    assert.ok(topRText.includes('年') && topRText.includes('月') && topRText.includes('日（') && !d.querySelector('.sheet .top-r .dt-val'), '勾选手填后应保留年月日及星期空白下划线格式：' + topRText);
-    assert.strictEqual(d.querySelectorAll('.sheet:first-child .top-r .u').length, 5, '手填模式应包含姓名+年月日星期共 5 条对齐下划线');
-    dtBlank.checked = false;
-    dtBlank.dispatchEvent(new w.Event('change'));
+    assert.ok(topRText.includes('年') && topRText.includes('月') && topRText.includes('日（') && !d.querySelector('.sheet .top-r .dt-val'), '取消自动日期后应保留年月日及星期空白下划线格式：' + topRText);
+    assert.strictEqual(d.querySelectorAll('.sheet:first-child .top-r .u').length, 5, '手填日期模式应包含姓名+年月日星期共 5 条对齐下划线');
+    dtAuto.checked = true;
+    dtAuto.dispatchEvent(new w.Event('change'));
+    assert.strictEqual(dtInput.style.display, '', '重新勾选自动日期应恢复显示日期选择器');
+    assert.strictEqual(d.querySelector('.sheet .top-r .dt-val').textContent, '2026年11月24日（二）', '重新勾选自动日期应保留已选日期');
+    dtInput.value = '';
+    dtInput.dispatchEvent(new w.Event('change'));
+    assert.strictEqual(dtAuto.checked, false, '清空日期框应自动取消勾选自动日期');
+    assert.strictEqual(dtInput.style.display, 'none', '清空日期框应隐藏日期选择器');
+    dtAuto.checked = true;
+    dtAuto.dispatchEvent(new w.Event('change'));
+    assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(dtInput.value), '空值下重新勾选自动日期应恢复当天日期');
 
     // 0b. 空白田字格克制数量（6 - 当页字数，上限 5 行）与拼音书写间距检查
     const sheets = [...d.querySelectorAll('.sheet')];
@@ -269,8 +282,8 @@ async function runTests(w, d) {
     assert.strictEqual(d.querySelectorAll('.sheet .blank-row').length, 0, '每页 5 字满页不应追加空白田字格');
 
     // 10. 一键打印按钮顺序、配色，以及 PDF 生成器与校验脚本测试
-    const btns = [...d.querySelectorAll('.opts button')].map((b) => b.id);
-    assert.deepStrictEqual(btns, ['bprint', 'bpdf', 'bmd'], '按钮顺序应为：一键打印、导出 PDF、导出 Markdown');
+    const btns = [...d.querySelectorAll('.opts button:not(.mini)')].map((b) => b.id);
+    assert.deepStrictEqual(btns, ['bprint', 'bpdf', 'bmd'], '主操作按钮顺序应为：一键打印、导出 PDF、导出 Markdown');
     assert.ok(!d.getElementById('bprint').classList.contains('alt'), '一键打印应使用主色（红色）');
     assert.ok(d.getElementById('bpdf').classList.contains('alt') && d.getElementById('bmd').classList.contains('alt'), '导出 PDF 和导出 Markdown 应使用中色调');
     assert.strictEqual(typeof w.doPrint, 'function', '应提供 doPrint 打印函数');
@@ -385,7 +398,352 @@ async function runTests(w, d) {
     const badCheck = checkPolyphones({ 种: { zhòng: ['种子'] } });
     assert.ok(badCheck.warnings.length >= 1, '校验脚本应能报出故意写错读音的例词');
 
-    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（${totalStrokesChecked} 条笔画矢量转换全通过；组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），混合矢量 PDF（首页流 ${(rawS1.length / 1024).toFixed(1)} KB → ${(compS1.length / 1024).toFixed(1)} KB）、排版折行、空白巩固区、日期下划线/手填、单音字改音、防空勾、局部保焦点、一键打印与 Markdown 均正常`);
+    // 11. 第二轮 #16：双面（笔顺+默写）/ 仅默写模式、1:1 配对防破页、乱序防连撞、搭档字描红/超纲兜底/切音与混合矢量 PDF
+    // 恢复前面用例改动过的「种」「数」「树」默认状态
+    w.resetWords('种', 'zhǒng');
+    w.delCustomPy('种', 'zhòng2');
+    if (!w.isOn('种', 'zhòng')) w.togglePy('种', 'zhòng', true);
+    w.resetWords('数', 'shuò');
+    if (w.isOn('数', 'shuò')) w.togglePy('数', 'shuò', false);
+    w.resetWords('树', treePy);
+    perSel.value = '6';
+    perSel.dispatchEvent(new w.Event('change'));
+    setInp('树桥数欢园种活极洗点');
+
+    assert.ok(srcHtml.includes('.wpy.poly-py{cursor:default;background:transparent!important;text-decoration:none!important;border:0!important'), '@media print 下多音搭档字拼音不应残留任何边框、底色或虚线');
+
+    const modeSel = d.getElementById('mode');
+    const bshuf = d.getElementById('bshuf');
+    const ghostWrap = d.getElementById('ghostWrap');
+    const setMode = (m) => {
+      modeSel.value = m;
+      modeSel.dispatchEvent(new w.Event('change'));
+    };
+
+    // 11a. 控件显隐与三态页眉联动
+    assert.strictEqual(modeSel.value, 'stroke', '默认模式应为笔顺（stroke）');
+    assert.strictEqual(bshuf.style.display, 'none', '笔顺模式应隐藏乱序按钮');
+    assert.strictEqual(ghostWrap.style.display, '', '笔顺模式应显示描红格');
+    assert.strictEqual(d.querySelectorAll('.sheet').length, 2, '笔顺模式 10 字每页 6 字应为 2 页正面');
+
+    setMode('duplex');
+    assert.strictEqual(bshuf.style.display, '', '双面模式应显示乱序按钮');
+    assert.strictEqual(ghostWrap.style.display, '', '双面模式应保留描红格');
+    assert.strictEqual(w.localStorage.getItem('hz_mode_v1'), 'duplex', '模式应持久化到 localStorage');
+    const duplexSheets = [...d.querySelectorAll('.sheet')];
+    assert.strictEqual(duplexSheets.length, 4, '双面模式 2 组生字应严格按 1:1 输出 4 页（Front_0/Back_0/Front_1/Back_1）');
+    assert.deepStrictEqual(
+      duplexSheets.map((el) => el.dataset.sheet),
+      ['front', 'back', 'front', 'back'],
+      '双面模式应严格奇偶交替输出正面与反面'
+    );
+    assert.deepStrictEqual(
+      duplexSheets.map((el) => el.querySelector('.top > span').textContent),
+      ['汉字笔顺练习', '生字默写练习', '汉字笔顺练习', '生字默写练习'],
+      '双面模式正反页眉标题应交替对应'
+    );
+
+    // 11b. 1:1 当页题源严格隔离（绝不跨页串字）+ 目标字空白 + 搭档字浅灰描红 + 叠词异音（数数）
+    const p0Set = new Set([...'树桥数欢园种']);
+    const p1Set = new Set([...'活极洗点']);
+    const back0Groups = [...duplexSheets[1].querySelectorAll('.wgrp')];
+    const back1Groups = [...duplexSheets[3].querySelectorAll('.wgrp')];
+    assert.ok(back0Groups.length >= 6 && back1Groups.length >= 4, '反面默写应覆盖当页全部生字例词');
+    const back0Targets = back0Groups.map((g) => g.dataset.target);
+    const back1Targets = back1Groups.map((g) => g.dataset.target);
+    assert.ok(back0Targets.every((t) => p0Set.has(t)), 'Back_0 严禁混入第 2 页生字：' + back0Targets.join(','));
+    assert.ok(back1Targets.every((t) => p1Set.has(t)), 'Back_1 严禁混入第 1 页生字：' + back1Targets.join(','));
+    p0Set.forEach((c) => assert.ok(back0Targets.includes(c), `Back_0 漏考当页生字「${c}」`));
+    p1Set.forEach((c) => assert.ok(back1Targets.includes(c), `Back_1 漏考当页生字「${c}」`));
+
+    // 目标字格必须为空白田字格，DB 内搭档字必须为 #d6d6d6 浅灰描红矢量笔画
+    const targetCells = [...duplexSheets[1].querySelectorAll('.cell[data-role="target"]')];
+    const partnerCells = [...duplexSheets[1].querySelectorAll('.cell[data-role="partner"][data-fallback="0"]')];
+    assert.ok(targetCells.length > 0 && partnerCells.length > 0, '反面默写应同时包含目标空白格与搭档描红格');
+    targetCells.forEach((el) => {
+      assert.strictEqual(el.querySelectorAll('path,text').length, 0, '目标字格应为空白田字格，不含任何笔画或文字');
+    });
+    partnerCells.forEach((el) => {
+      const paths = [...el.querySelectorAll('path')];
+      assert.ok(paths.length > 0 && paths.every((p) => p.getAttribute('fill') === '#d6d6d6'), 'DB 内搭档字格应渲染 #d6d6d6 浅灰描红笔画');
+    });
+    // 校验「数数」末字异音 shǔ shù 与「数一数」双目标字 shǔ yī shǔ
+    assert.strictEqual(w.resolveDictCellPy('数', 'shǔ', '数数', 0), 'shǔ', '「数数」首字应读 shǔ');
+    assert.strictEqual(w.resolveDictCellPy('数', 'shǔ', '数数', 1), 'shù', '「数数」末字应智能识别为 shù');
+    assert.strictEqual(w.resolveDictCellPy('数', 'shǔ', '数一数', 0), 'shǔ', '「数一数」首字应读 shǔ');
+    assert.strictEqual(w.resolveDictCellPy('数', 'shǔ', '数一数', 2), 'shǔ', '「数一数」末字应读 shǔ');
+
+    // 11c. 防相邻同字重排 + 乱序按钮四端同步一致
+    for (let i = 1; i < back0Targets.length; i++) {
+      assert.notStrictEqual(back0Targets[i], back0Targets[i - 1], `Back_0 相邻两题不应考同一个生字（位置 ${i - 1}/${i}：${back0Targets[i]}）`);
+    }
+    for (let i = 1; i < back1Targets.length; i++) {
+      assert.notStrictEqual(back1Targets[i], back1Targets[i - 1], `Back_1 相邻两题不应考同一个生字（位置 ${i - 1}/${i}：${back1Targets[i]}）`);
+    }
+    // 边界防连撞压测（maxCount === ceil(N/2)，如 4A + 2B + 1C）
+    const tightItems = [
+      { target: '树', targetPy: 'shù', word: '大树' },
+      { target: '树', targetPy: 'shù', word: '树叶' },
+      { target: '树', targetPy: 'shù', word: '树林' },
+      { target: '树', targetPy: 'shù', word: '树干' },
+      { target: '桥', targetPy: 'qiáo', word: '大桥' },
+      { target: '桥', targetPy: 'qiáo', word: '木桥' },
+      { target: '欢', targetPy: 'huān', word: '欢乐' },
+    ];
+    const tightShuffled = w.shuffleDictItems(tightItems, 0);
+    for (let i = 1; i < tightShuffled.length; i++) {
+      assert.notStrictEqual(tightShuffled[i].target, tightShuffled[i - 1].target, '极限可行分布（maxCount=ceil(N/2)）仍应彻底消除相邻同字');
+    }
+
+    const beforeOrder = back0Groups.map((g) => g.dataset.target + ':' + g.dataset.word).join('|');
+    const seedBefore = w.eval('shuffleSeed');
+    bshuf.click();
+    const seedAfter = w.eval('shuffleSeed');
+    assert.notStrictEqual(seedAfter, seedBefore, '点击乱序应生成新随机种子');
+    const afterBack0Groups = [...d.querySelectorAll('.sheet[data-sheet="back"]')[0].querySelectorAll('.wgrp')];
+    const afterOrder = afterBack0Groups.map((g) => g.dataset.target + ':' + g.dataset.word).join('|');
+    assert.notStrictEqual(afterOrder, beforeOrder, '点击乱序应改变反面默写词序');
+    const plan0 = w.buildPagePlan(w.cur().ok, 6)[0];
+    assert.strictEqual(
+      plan0.dictItems.map((x) => x.target + ':' + x.word).join('|'),
+      afterOrder,
+      'PDF/布局计划与屏幕预览词序应 100% 一致'
+    );
+    const mdDuplex = w.buildMd();
+    assert.ok(mdDuplex.includes('# 生字练习表') && mdDuplex.includes('## 反面默写练习') && mdDuplex.includes('### 第 1 页'), '双面模式 Markdown 应包含正面生字表与反面默写练习');
+    const firstItemMd = w.formatDictItemMd(plan0.dictItems[0]);
+    assert.ok(mdDuplex.includes('1. ' + firstItemMd), '双面模式 Markdown 反面默写顺序应与当前乱序严格同步：' + firstItemMd);
+
+    // 11d. 仅默写模式控件与 Markdown
+    setMode('dictation');
+    assert.strictEqual(bshuf.style.display, '', '仅默写模式应显示乱序按钮');
+    assert.strictEqual(ghostWrap.style.display, 'none', '仅默写模式应隐藏描红格');
+    const dictOnlySheets = [...d.querySelectorAll('.sheet')];
+    assert.strictEqual(dictOnlySheets.length, 2, '仅默写模式 10 字每页 6 字应只输出 2 页反面默写');
+    assert.ok(dictOnlySheets.every((s) => s.dataset.sheet === 'back' && s.querySelector('.top > span').textContent === '生字默写练习'), '仅默写模式全部页面应为生字默写练习');
+    const mdDictOnly = w.buildMd();
+    assert.ok(mdDictOnly.startsWith('# 生字默写练习\n') && !mdDictOnly.includes('## 参考答案') && mdDictOnly.includes('（　）'), '仅默写模式 Markdown 应输出挖空题面且不含答案区');
+
+    // 11e. 卡片增删组词实时联动、无词生字保底、超纲搭档字楷体兜底、多音搭档字语境定音与跨乱序切音保持
+    setMode('duplex');
+    setInp('琅捌大树');
+    // 超纲搭档字「玕」（琅玕）楷体兜底
+    const fbCell = d.querySelector('.sheet[data-sheet="back"] .cell[data-role="partner"][data-char="玕"][data-fallback="1"]');
+    assert.ok(fbCell && fbCell.querySelector('text') && fbCell.querySelector('text').textContent === '玕' && fbCell.querySelector('text').getAttribute('fill') === '#d6d6d6', '超纲搭档字「玕」应回退渲染浅灰楷体 <text> 且不留白不报错');
+    assert.strictEqual(w.resolveDictCellPy('琅', 'láng', '琅玕', 1), '', '超纲搭档字拼音应安全留空');
+    // 无词生字「捌」保底单字默写项
+    const baGrp = d.querySelector('.sheet[data-sheet="back"] .wgrp[data-target="捌"][data-word="捌"]');
+    assert.ok(baGrp && baGrp.querySelectorAll('.cell[data-role="target"]').length === 1, '无例词生字「捌」应保底生成单字默写项');
+    // 卡片增删组词实时同步反面默写 + 多音搭档字语境定音（大 -> 长大 中「长」应定音 zhǎng）
+    const daPy = db['大'].p[0];
+    w.addWords('大', daPy, '长大');
+    const zhangDaPyEl = d.querySelector(`.sheet[data-sheet="back"] .wpy.poly-py[data-target="大"][data-word="长大"][data-ci="0"]`);
+    assert.ok(zhangDaPyEl && zhangDaPyEl.textContent === 'zhǎng', '新增组词「长大」应实时同步反面默写且多音搭档字「长」自动定音 zhǎng');
+    // 点击多音搭档字切换读音，并在点击「乱序」及重载后依然跟随该词保持！
+    zhangDaPyEl.click();
+    assert.strictEqual(
+      d.querySelector('.sheet[data-sheet="back"] .wpy.poly-py[data-target="大"][data-word="长大"][data-ci="0"]').textContent,
+      'cháng',
+      '点击多音搭档字「长」应就地切换读音为 cháng'
+    );
+    const savedPartner = JSON.parse(w.localStorage.getItem('hz_partner_py_v1') || '{}');
+    assert.strictEqual(savedPartner[`大:${daPy}:长大:0`], 'cháng', '搭档字切音应按 target:targetPy:word:ci 键持久化');
+    bshuf.click();
+    assert.strictEqual(
+      d.querySelector('.sheet[data-sheet="back"] .wpy.poly-py[data-target="大"][data-word="长大"][data-ci="0"]').textContent,
+      'cháng',
+      '点击乱序重排后，手动切换的搭档字读音应依然稳固跟随该词'
+    );
+    w.eval('partnerPy={}');
+    w.loadUiState();
+    w.render();
+    assert.strictEqual(
+      d.querySelector('.sheet[data-sheet="back"] .wpy.poly-py[data-target="大"][data-word="长大"][data-ci="0"]').textContent,
+      'cháng',
+      '刷新重载后搭档字切音覆盖应从 localStorage 完整恢复'
+    );
+    // 清理：切回默认 + 删除临时词验证实时消失
+    d.querySelector('.sheet[data-sheet="back"] .wpy.poly-py[data-target="大"][data-word="长大"][data-ci="0"]').click();
+    w.delWord('大', daPy, '长大');
+    assert.strictEqual(d.querySelector('.sheet[data-sheet="back"] .wgrp[data-target="大"][data-word="长大"]'), null, '删除卡片组词后反面默写应立即移除对应词条');
+    w.resetWords('大', daPy);
+
+    // 11f. 极端 50+ 词单页刚性防破页压测 + 超长自定义词安全切分
+    const stressItems = [];
+    for (let i = 0; i < 60; i++) {
+      const c = ['树', '桥', '欢', '园', '活', '极'][i % 6];
+      const wTxt = i % 3 === 0 ? c + '林' : (i % 3 === 1 ? '大' + c : c + '一' + c);
+      stressItems.push({ target: c, targetPy: db[c].p[0], word: wTxt });
+    }
+    stressItems.push({ target: '树', targetPy: db['树'].p[0], word: '大树小树老树新树青树绿树高树矮树松树柏树' });
+    const stressLay = w.layoutDictPage(stressItems);
+    assert.ok(stressLay.rows.length > 0 && stressLay.cellMm < 17, `单页塞入 61 词应触发自适应压缩（cellMm=${stressLay.cellMm}）`);
+    const lastStressRow = stressLay.rows[stressLay.rows.length - 1];
+    assert.ok(lastStressRow.cellY + stressLay.cellMm <= 287.01, `61 词极端压测单页底边严禁溢出 287mm：${lastStressRow.cellY + stressLay.cellMm}`);
+    stressLay.rows.forEach((r) => {
+      const lastIt = r.items[r.items.length - 1];
+      assert.ok(lastIt.x + lastIt.w <= 183.51, `极端压测含超长词行宽严禁溢出 183.5mm：${lastIt.x + lastIt.w}`);
+    });
+
+    // 11g. 双面/反面混合矢量 PDF 流（含超纲搭档字 /F0）、多页共享页眉（/Top + /TopBack）、xref 偏移与 FlateDecode 解压校验
+    const langPlan = w.buildPagePlan([...'琅树桥欢'], 6)[0];
+    const langDictLay = w.layoutDictPage(langPlan.dictItems);
+    const backRaw = w.buildDictPageStream(
+      langDictLay,
+      strokeCache,
+      langDictLay.rows.map((_, i) => 'P' + i),
+      'TopBack',
+      { 玕: 'F0' }
+    );
+    assert.ok(!/NaN|undefined|Infinity/.test(backRaw), '反面默写 PDF 矢量流不应出现非法数值');
+    assert.ok(
+      backRaw.includes('/TopBack Do') && backRaw.includes('/P0 Do') && backRaw.includes('/F0 Do') &&
+      backRaw.includes('0.839 g') && backRaw.includes(' re S') && !backRaw.includes('0.133 g'),
+      '反面默写 PDF 流应包含 /TopBack、/P0、超纲搭档字 /F0、浅灰搭档笔画 0.839 g 且不含深色全字笔画'
+    );
+    const backComp = await w.deflateBytes(enc.encode(backRaw));
+    const backImgs = Object.fromEntries(langDictLay.rows.map((_, i) => ['P' + i, topImg]));
+    backImgs.F0 = topImg;
+    const duplexPdfBlob = w.makePdf(
+      [
+        { stream: compS1, images: makeImgs(layP1.blocks.length) },
+        { stream: backComp, images: backImgs },
+      ],
+      { Top: topImg, TopBack: topImg }
+    );
+    const dPdfBuf = Buffer.concat(duplexPdfBlob.p.map((x) => (typeof x === 'string' ? Buffer.from(x) : Buffer.from(x))));
+    const dPdfLat = dPdfBuf.toString('latin1');
+    assert.ok(dPdfLat.includes('/Count 2') && dPdfLat.includes('/Top ') && dPdfLat.includes('/TopBack '), '双面 PDF 应包含 2 页并共享 /Top 与 /TopBack 页眉');
+    const dSx = dPdfLat.match(/startxref\n(\d+)\n%%EOF/);
+    assert.ok(dSx && dPdfLat.slice(Number(dSx[1])).startsWith('xref\n0 '), '双面 PDF startxref 应有效');
+    const dXrefLines = dPdfLat.slice(Number(dSx[1])).split('\n').filter((l) => /^\d{10} \d{5} [nf] ?$/.test(l));
+    for (let objNum = 1; objNum < dXrefLines.length; objNum++) {
+      const off = Number(dXrefLines[objNum].slice(0, 10));
+      assert.ok(dPdfLat.slice(off, off + 20).startsWith(`${objNum} 0 obj\n`), `双面 PDF xref 对象 ${objNum} 偏移无效`);
+    }
+    const dStreamRe = /<<([^>]+)>>\nstream\n/g;
+    const dDecoded = [];
+    let dm;
+    while ((dm = dStreamRe.exec(dPdfLat))) {
+      const lenM = dm[1].match(/\/Length (\d+)/);
+      const sLen = Number(lenM[1]);
+      const start = dm.index + dm[0].length;
+      const inf = zlib.inflateSync(dPdfBuf.subarray(start, start + sLen));
+      if (!dm[1].includes('/Subtype/Image')) dDecoded.push(inf.toString('utf8'));
+      dStreamRe.lastIndex = start + sLen;
+    }
+    assert.deepStrictEqual(dDecoded, [rawS1, backRaw], '双面 PDF 正反两页矢量流解压后应与原始内容完全一致');
+
+    // 11h. 仅默写模式专属反选去字/去音、紧凑合页、搭档字兜底、全反选空态拦截与跨模式守恒
+    setInp('树桥数欢园种活极洗点');
+    perSel.value = '6';
+    perSel.dispatchEvent(new w.Event('change'));
+    w.eval('singlesOpen=null');
+
+    // stroke 与 duplex 下严禁取消多音字最后读音，且普通单音字无反选框
+    for (const m of ['stroke', 'duplex']) {
+      setMode(m);
+      assert.strictEqual(d.querySelectorAll('#singles .s-cb').length, 0, `${m} 模式下普通单音字不应出现反选勾选框`);
+      w.togglePy('数', 'shǔ', false);
+      w.togglePy('数', 'shù', false);
+      assert.strictEqual(w.activeEntries('数').length, 1, `${m} 模式下严禁取消多音字最后一个读音`);
+      assert.ok(d.getElementById('msg').textContent.includes('至少保留一个读音'), `${m} 模式尝试清空多音字读音应提示`);
+      w.togglePy('数', 'shǔ', true);
+    }
+
+    // 切换至 dictation（仅默写）：自动展开 #singles 且展示已选字数
+    setMode('dictation');
+    const dictSinglesDet = d.querySelector('#singles details');
+    assert.ok(dictSinglesDet && dictSinglesDet.open, '仅默写模式下（未手动折叠时）应自动展开普通汉字设置面板');
+    assert.ok(dictSinglesDet.querySelector('summary').textContent.includes('普通汉字默写与组词设置（已选 '), '仅默写模式 summary 应展示已选字数');
+    assert.ok(d.querySelectorAll('#singles .s-cb').length >= 7, '仅默写模式普通单音字行应展示反选勾选框');
+    assert.strictEqual(d.querySelectorAll('.sheet').length, 2, '10 字未反选时应有 2 页默写纸');
+
+    // 允许取消多音字「数」的全部读音（0 读音），且彻底消失（不触发单字保底）
+    d.querySelector('#poly .pcard[data-char="数"] .ptag[data-py="shù"] input').click();
+    d.querySelector('#poly .pcard[data-char="数"] .ptag[data-py="shǔ"] input').click();
+    const shuCardOff = d.querySelector('#poly .pcard[data-char="数"]');
+    assert.ok(shuCardOff && shuCardOff.classList.contains('off') && !shuCardOff.querySelector('.pw-list'), '全反选多音字后卡片应呈现弱化态并隐藏词列表');
+    assert.strictEqual(w.activeEntries('数').length, 0, '仅默写模式下多音字「数」应允许 0 读音');
+    assert.strictEqual(d.querySelector('.sheet .wgrp[data-target="数"]'), null, '0 读音的「数」不应再出现在预览默写卷（不触发单字保底）');
+
+    // 反选 5 个普通单音字（共跳过 6 字，剩余 4 字），10 字从 2 页自动紧凑合并为 1 页
+    for (const ch of ['树', '桥', '欢', '园', '活']) {
+      d.querySelector(`#singles .srow[data-char="${ch}"] .s-cb`).click();
+      assert.ok(d.querySelector(`#singles .srow[data-char="${ch}"]`).classList.contains('off'), `反选普通字「${ch}」后该行应弱化显示`);
+    }
+    assert.strictEqual(d.querySelectorAll('.sheet').length, 1, '10 字反选 6 字后，剩余 4 字应紧凑合为 1 页默写纸');
+    const compactPlans = w.buildPagePlan(w.cur().ok, 6);
+    assert.strictEqual(compactPlans.length, 1, 'PDF/布局分页计划也应同步紧凑为 1 页');
+    assert.ok(compactPlans[0].dictItems.every((it) => !['数', '树', '桥', '欢', '园', '活'].includes(it.target)), '反选字的词条不应进入 PDF 分页计划');
+    const compactMd = w.buildMd();
+    assert.ok(!compactMd.includes('### 第 2 页'), 'Markdown 紧凑合页后不应再出现第 2 页');
+    assert.ok(!compactMd.includes('数学') && !compactMd.includes('大（　）') && compactMd.includes('（　）树'), 'Markdown 应彻底移除反选字「数」「树」的题目，同时保留「种树」的搭档字「树」：' + compactMd);
+    assert.ok(!compactPlans[0].dictItems.some((it) => it.target === '数' || it.target === '树'), '反选目标字彻底从题源移除');
+    // 验证被反选的「树」作为「种」的例词「种树」搭档字出现时，依然有浅灰描红与拼音 shù
+    const zhongShuGrp = d.querySelector('.sheet .wgrp[data-target="种"][data-word="种树"]');
+    assert.ok(zhongShuGrp, '未反选的「种」应保留例词「种树」');
+    const shuPartnerCell = zhongShuGrp.querySelector('.cell[data-role="partner"][data-char="树"]');
+    const shuPartnerPy = zhongShuGrp.querySelector('.wpy[data-char="树"]');
+    assert.ok(shuPartnerCell && shuPartnerCell.querySelectorAll('path').length > 0, '被反选的「树」作为搭档字仍应有浅灰描红笔画');
+    assert.strictEqual(shuPartnerPy && shuPartnerPy.textContent, 'shù', '被反选的「树」作为搭档字仍应显示拼音 shù');
+    assert.strictEqual(w.findPartnerContextPy('数个', 0), 'shù', '被全反选的多音字「数」作为搭档字回退时仍应有默认拼音');
+
+    // 验证普通单音字点击拼音文本仍可改音且不与勾选框冲突
+    const jiPyEdit = d.querySelector('#singles .srow[data-char="极"] .pw-py.py-edit');
+    jiPyEdit.click();
+    assert.ok(d.querySelector('#singles .srow[data-char="极"] .py-inp'), '仅默写模式下点击单音字拼音文本仍应打开 inline 改音框');
+    assert.strictEqual(w.isSingleOn('极'), true, '点击拼音改音不应误触发反选勾选框');
+    w.setSinglePy('极', '');
+
+    // 全反选 0 字时的空态提示与打印/PDF/Markdown 拦截
+    d.querySelector('#poly .pcard[data-char="种"] .ptag[data-py="zhǒng"] input').click();
+    d.querySelector('#poly .pcard[data-char="种"] .ptag[data-py="zhòng"] input').click();
+    d.querySelector('#poly .pcard[data-char="洗"] .ptag[data-py="xǐ"] input').click();
+    for (const ch of ['极', '点']) {
+      d.querySelector(`#singles .srow[data-char="${ch}"] .s-cb`).click();
+    }
+    assert.strictEqual(d.querySelectorAll('.sheet').length, 0, '全反选后不应渲染空白 A4 页');
+    assert.ok(d.getElementById('root').textContent.includes('已反选全部读音'), '全反选后预览区应显示清晰空态提示');
+    w.doPrint();
+    assert.ok(d.getElementById('msg').textContent.includes('请至少勾选一个需要默写的读音'), '全反选点击打印应拦截提示');
+    d.getElementById('msg').textContent = '';
+    await w.exportPdf();
+    assert.ok(d.getElementById('msg').textContent.includes('请至少勾选一个需要默写的读音'), '全反选导出 PDF 应拦截提示');
+    d.getElementById('msg').textContent = '';
+    await w.exportMd();
+    assert.ok(d.getElementById('msg').textContent.includes('请至少勾选一个需要默写的读音'), '全反选导出 Markdown 应拦截提示');
+
+    // 跨模式守恒：从全反选的 dictation 切回 stroke / duplex 时自动恢复默认读音，未改动再切回 dictation 保留原反选状态
+    setMode('stroke');
+    assert.strictEqual(d.getElementById('msg').textContent, '', '切换模式应清空残留拦截提示');
+    assert.strictEqual(d.querySelectorAll('.sheet').length, 2, '切回笔顺模式应自动恢复全部 10 字 2 页');
+    assert.strictEqual(w.activeEntries('数').length, 2, '切回笔顺模式时全反选多音字「数」应自动恢复默认读音');
+    assert.strictEqual(w.activeEntries('树').length, 1, '切回笔顺模式时反选单音字「树」应自动恢复激活');
+    setMode('duplex');
+    assert.strictEqual(d.querySelectorAll('.sheet').length, 4, '切至双面模式应自动恢复完整 4 页 1:1 配对');
+    setMode('dictation');
+    assert.strictEqual(w.activeEntries('数').length, 0, '未在笔顺/双面改动时切回仅默写应保留原全反选状态');
+    assert.strictEqual(w.activeEntries('树').length, 0, '未在笔顺/双面改动时切回仅默写应保留单音字反选状态');
+
+    // 在笔顺模式下对曾全反选的「数」主动取消 1 个读音，应先具体化默认态再变更，绝不掉回 0 读音
+    setMode('stroke');
+    d.querySelector('#poly .pcard[data-char="数"] .ptag[data-py="shǔ"] input').click();
+    assert.deepStrictEqual([...w.activeEntries('数').map((e) => e.p)], ['shù'], '笔顺下操作曾全反选的多音字应具体化默认勾选再应用变更，保留 shù');
+    w.togglePy('数', 'shǔ', true);
+
+    // 清理测试中写入的 dictation 反选状态并恢复默认笔顺模式
+    setMode('dictation');
+    w.togglePy('种', 'zhǒng', true);
+    w.togglePy('种', 'zhòng', true);
+    w.togglePy('洗', 'xǐ', true);
+    for (const ch of ['树', '桥', '欢', '园', '活', '极', '点']) {
+      w.toggleSingleOn(ch, true);
+    }
+    setMode('stroke');
+    assert.strictEqual(errors.length, 0, '双面/默写模式测试过程不应产生任何脚本错误：' + errors.join(' | '));
+
+    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（${totalStrokesChecked} 条笔画矢量转换全通过；组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），混合矢量 PDF（首页流 ${(rawS1.length / 1024).toFixed(1)} KB → ${(compS1.length / 1024).toFixed(1)} KB）、双面正反 1:1 默写（乱序防连撞、61 词单页防破页、超纲楷体兜底、搭档字切音）、仅默写反选去字合页、自动日期、排版折行、空白巩固区、单音字改音、防空勾、局部保焦点、一键打印与 Markdown 均正常`);
     process.exit(0);
   } catch (e) {
     console.error('冒烟测试失败：' + e.message);
