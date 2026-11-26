@@ -741,9 +741,228 @@ async function runTests(w, d) {
       w.toggleSingleOn(ch, true);
     }
     setMode('stroke');
-    assert.strictEqual(errors.length, 0, '双面/默写模式测试过程不应产生任何脚本错误：' + errors.join(' | '));
 
-    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（${totalStrokesChecked} 条笔画矢量转换全通过；组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），混合矢量 PDF（首页流 ${(rawS1.length / 1024).toFixed(1)} KB → ${(compS1.length / 1024).toFixed(1)} KB）、双面正反 1:1 默写（乱序防连撞、61 词单页防破页、超纲楷体兜底、搭档字切音）、仅默写反选去字合页、自动日期、排版折行、空白巩固区、单音字改音、防空勾、局部保焦点、一键打印与 Markdown 均正常`);
+    // 11i. Issue #22：默写词组页顶部乱序无拼音参考汉字栏与显隐开关（四端同步与 PDF 混合矢量）
+    const refWrap = d.getElementById('refWrap');
+    const showRefCb = d.getElementById('showRef');
+    const setShowRef = (val) => {
+      showRefCb.checked = val;
+      showRefCb.dispatchEvent(new w.Event('change'));
+    };
+    const firstTargetsOf = (items) => {
+      const res = [], seen = new Set();
+      items.forEach((it) => {
+        if (it.target && !seen.has(it.target)) {
+          seen.add(it.target);
+          res.push(it.target);
+        }
+      });
+      return res;
+    };
+
+    // (1) 控件显隐联动、默认勾选与 hz_ref_v1 持久化/重载恢复
+    assert.ok(refWrap && showRefCb, '应存在参考汉字显隐控件 #refWrap 与 #showRef');
+    assert.strictEqual(showRefCb.checked, true, '参考汉字开关默认应勾选');
+    assert.strictEqual(refWrap.style.display, 'none', '笔顺模式下应隐藏参考汉字开关');
+    setMode('duplex');
+    assert.strictEqual(refWrap.style.display, '', '双面模式下应显示参考汉字开关');
+    setMode('dictation');
+    assert.strictEqual(refWrap.style.display, '', '仅默写模式下应显示参考汉字开关');
+    setShowRef(false);
+    assert.strictEqual(w.localStorage.getItem('hz_ref_v1'), '0', '取消勾选参考汉字应持久化 0 至 hz_ref_v1');
+    showRefCb.checked = true;
+    w.loadUiState();
+    assert.strictEqual(showRefCb.checked, false, '重载 loadUiState() 应从 hz_ref_v1 恢复未勾选状态');
+    setShowRef(true);
+    assert.strictEqual(w.localStorage.getItem('hz_ref_v1'), '1', '重新勾选参考汉字应持久化 1 至 hz_ref_v1');
+    showRefCb.checked = false;
+    w.loadUiState();
+    assert.strictEqual(showRefCb.checked, true, '重载 loadUiState() 应从 hz_ref_v1 恢复勾选状态');
+
+    // (2) 双面模式仅 back 页渲染 .ref-bar、当页隔离（多音字仅 1 次）、纯矢量楷体笔画且无拼音
+    setMode('duplex');
+    setInp('树桥数欢园种活极洗点');
+    perSel.value = '6';
+    perSel.dispatchEvent(new w.Event('change'));
+    assert.strictEqual(d.querySelectorAll('.sheet[data-sheet="front"] .ref-bar').length, 0, '正面笔顺页绝不应渲染参考汉字栏');
+    const refBars = [...d.querySelectorAll('.sheet[data-sheet="back"] .ref-bar')];
+    assert.strictEqual(refBars.length, 2, '双面模式 2 个反面默写页应各渲染 1 条参考汉字栏');
+    [p0Set, p1Set].forEach((expectedSet, pageIdx) => {
+      const bar = refBars[pageIdx];
+      const chEls = [...bar.querySelectorAll('.ref-ch')];
+      const chList = chEls.map((el) => el.dataset.char);
+      assert.strictEqual(chList.length, expectedSet.size, `Back_${pageIdx} 参考汉字数应精确等于当页生字数（多音字不重复）`);
+      assert.deepStrictEqual(new Set(chList), expectedSet, `Back_${pageIdx} 参考汉字集合应精确隔离为当页生字`);
+      assert.strictEqual(bar.textContent, '参考生字：', `Back_${pageIdx} 参考汉字栏除标签外不应包含任何拼音拉丁字母`);
+      chEls.forEach((el) => {
+        assert.strictEqual(el.querySelectorAll('line,text').length, 0, '参考汉字格不应包含田字格虚线或回退文本');
+        const paths = [...el.querySelectorAll('svg path')];
+        assert.ok(paths.length > 0 && paths.every((p) => p.getAttribute('fill') === '#222'), '参考汉字应使用 #222 纯矢量楷体笔画');
+      });
+    });
+
+    // (3) 出场即乱序 + 点击乱序双路重排（含 6 字/4 字/2 字页）与四端顺序 100% 一致
+    w.eval('shuffleSeed = INIT_SHUFFLE_SEED');
+    w.render();
+    const initPlans10 = w.buildPagePlan(w.cur().ok, 6);
+    initPlans10.forEach((pl) => {
+      assert.notStrictEqual(pl.refChars.join(''), pl.pageChars.join(''), `初始第 ${pl.pIdx} 页（${pl.pageChars.length} 字）参考字出场即应乱序`);
+      assert.notStrictEqual(pl.refChars.join(''), firstTargetsOf(pl.dictItems).join(''), `初始第 ${pl.pIdx} 页参考字不应等于默写首现顺序`);
+    });
+
+    setInp('树桥数欢园种活极');
+    w.eval('shuffleSeed = INIT_SHUFFLE_SEED');
+    w.render();
+    let curPlans8 = w.buildPagePlan(w.cur().ok, 6);
+    assert.strictEqual(curPlans8.length, 2, '8 字每页 6 字应分为 6+2 两页');
+    assert.notStrictEqual(curPlans8[0].refChars.join(''), curPlans8[0].pageChars.join(''), '8 字第 1 页（6 字）出场即乱序');
+    assert.notStrictEqual(curPlans8[0].refChars.join(''), firstTargetsOf(curPlans8[0].dictItems).join(''), '8 字第 1 页参考字不应等于首现目标顺序');
+    assert.deepStrictEqual([...curPlans8[1].refChars], ['极', '活'], '2 字第 2 页初始出场应严格不同于正面原序 [活, 极]');
+
+    for (let k = 0; k < 3; k++) {
+      const prevDictSigs = curPlans8.map((pl) => pl.dictItems.map((x) => x.target + ':' + x.word).join(','));
+      const prevRefSigs = curPlans8.map((pl) => pl.refChars.join(''));
+      bshuf.click();
+      const nextPlans8 = w.buildPagePlan(w.cur().ok, 6);
+      const mdAfterShuf = w.buildMd();
+      const backBars8 = [...d.querySelectorAll('.sheet[data-sheet="back"] .ref-bar')];
+      assert.strictEqual(backBars8.length, 2, '乱序后仍应保留 2 页反面参考汉字栏');
+      nextPlans8.forEach((pl, idx) => {
+        const nextDictSig = pl.dictItems.map((x) => x.target + ':' + x.word).join(',');
+        const nextRefSig = pl.refChars.join('');
+        assert.notStrictEqual(nextDictSig, prevDictSigs[idx], `第 ${k + 1} 次乱序后第 ${idx} 页默写词序应改变`);
+        assert.notStrictEqual(nextRefSig, prevRefSigs[idx], `第 ${k + 1} 次乱序后第 ${idx} 页（${pl.pageChars.length} 字）参考字顺序应同步改变`);
+        if (pl.pageChars.length >= 3) {
+          assert.notStrictEqual(nextRefSig, pl.pageChars.join(''), 'n>=3 页乱序后仍严禁等于正面原序');
+          assert.notStrictEqual(nextRefSig, firstTargetsOf(pl.dictItems).join(''), 'n>=3 页乱序后仍严禁等于默写首现顺序');
+        }
+        const domRefs = [...backBars8[idx].querySelectorAll('.ref-ch')].map((el) => el.dataset.char);
+        assert.deepStrictEqual(domRefs, [...pl.refChars], `第 ${idx} 页 DOM .ref-ch 与 buildPagePlan().refChars 应一致`);
+        assert.ok(mdAfterShuf.includes('参考生字：' + pl.refChars.join('　')), `第 ${idx} 页 Markdown 参考生字行应与乱序结果一致`);
+      });
+      assert.strictEqual(w.refOrderSig(w.cur().ok, 6), nextPlans8.map((pl) => pl.refChars.join('')).join('|'), 'refOrderSig 应精确汇总各页参考字顺序');
+      curPlans8 = nextPlans8;
+    }
+
+    // 7 字 [6, 1] 含单字末页时，reshuffleDict() 应不因单字页卡死且第 1 页双路 100% 变化并生成新种子
+    setInp('树桥数欢园种活');
+    let curPlans7 = w.buildPagePlan(w.cur().ok, 6);
+    assert.strictEqual(curPlans7.length, 2, '7 字每页 6 字应分为 6+1 两页');
+    assert.deepStrictEqual([...curPlans7[1].refChars], ['活'], '单字末页参考字应安全返回 [活]');
+    for (let k = 0; k < 2; k++) {
+      const prevSeed7 = w.eval('shuffleSeed');
+      const prevDict7 = curPlans7[0].dictItems.map((x) => x.target + ':' + x.word).join(',');
+      const prevRef7 = curPlans7[0].refChars.join('');
+      bshuf.click();
+      const nextSeed7 = w.eval('shuffleSeed');
+      const nextPlans7 = w.buildPagePlan(w.cur().ok, 6);
+      assert.notStrictEqual(nextSeed7, prevSeed7, `7 字 [6,1] 第 ${k + 1} 次乱序不应退回旧种子`);
+      assert.notStrictEqual(nextPlans7[0].dictItems.map((x) => x.target + ':' + x.word).join(','), prevDict7, `7 字 [6,1] 第 ${k + 1} 次乱序第 1 页词序应改变`);
+      assert.notStrictEqual(nextPlans7[0].refChars.join(''), prevRef7, `7 字 [6,1] 第 ${k + 1} 次乱序第 1 页参考字序应改变`);
+      assert.deepStrictEqual([...nextPlans7[1].refChars], ['活'], '7 字 [6,1] 单字末页参考字应保持 [活]');
+      curPlans7 = nextPlans7;
+    }
+
+    // (4) dictation 模式反选跳过多音字/普通字后，参考栏立即剔除并随紧凑合页同步
+    setInp('树桥数欢园种活极洗点');
+    setMode('dictation');
+    d.querySelector('#poly .pcard[data-char="数"] .ptag[data-py="shù"] input').click();
+    d.querySelector('#poly .pcard[data-char="数"] .ptag[data-py="shǔ"] input').click();
+    for (const ch of ['树', '桥', '欢', '园', '活']) {
+      d.querySelector(`#singles .srow[data-char="${ch}"] .s-cb`).click();
+    }
+    const dictCompactBars = [...d.querySelectorAll('.sheet[data-sheet="back"] .ref-bar')];
+    assert.strictEqual(dictCompactBars.length, 1, '反选 6 字后紧凑合为 1 页，参考栏应同步为 1 条');
+    const compactRefChars = [...dictCompactBars[0].querySelectorAll('.ref-ch')].map((el) => el.dataset.char);
+    assert.deepStrictEqual(new Set(compactRefChars), new Set(['种', '极', '洗', '点']), '反选跳过字应立即从参考汉字栏移除');
+    w.togglePy('数', 'shù', true);
+    w.togglePy('数', 'shǔ', true);
+    for (const ch of ['树', '桥', '欢', '园', '活']) {
+      w.toggleSingleOn(ch, true);
+    }
+
+    // (5) 取消勾选 #showRef 后 DOM/Markdown/layoutDictPage 联动隐藏与恢复 269mm 高度，再重新勾选恢复
+    setShowRef(false);
+    assert.strictEqual(d.querySelectorAll('.ref-bar').length, 0, '取消勾选参考汉字后 DOM 不应渲染 .ref-bar');
+    assert.ok(!w.buildMd().includes('参考生字：'), '取消勾选参考汉字后 Markdown 不应包含参考生字行');
+    const noRefLay = w.layoutDictPage(w.buildPagePlan(w.cur().ok, 6)[0].dictItems, []);
+    assert.strictEqual(noRefLay.hasRef, false, '空 refChars 时 layoutDictPage 应返回 hasRef=false');
+    assert.strictEqual(noRefLay.rows[0].y, 18, '关闭参考汉字栏时默写首行起始 y 应恢复为 18mm（可用高度 269mm）');
+    setShowRef(true);
+    assert.strictEqual(d.querySelectorAll('.sheet[data-sheet="back"] .ref-bar').length, 2, '重新勾选参考汉字后应恢复渲染 .ref-bar');
+    assert.ok(w.buildMd().includes('参考生字：'), '重新勾选参考汉字后 Markdown 应恢复参考生字行');
+
+    // (6) 61 词含超长词极端压测开启参考栏：首行 y=29.5 且底边不溢出 287mm
+    const stressRefLay = w.layoutDictPage(stressItems, [...'树桥欢园活极']);
+    assert.strictEqual(stressRefLay.hasRef, true, '传参开启参考栏时 hasRef 应为 true');
+    assert.strictEqual(stressRefLay.rows[0].y, 29.5, '开启参考栏后首行起始纵坐标应为 29.5mm');
+    const lastStressRefRow = stressRefLay.rows[stressRefLay.rows.length - 1];
+    assert.ok(lastStressRefRow.cellY + stressRefLay.cellMm <= 287.01, `开启参考栏后 61 词压测底边严禁溢出 287mm：${lastStressRefRow.cellY + stressRefLay.cellMm}`);
+    stressRefLay.rows.forEach((r) => {
+      const lastIt = r.items[r.items.length - 1];
+      assert.ok(lastIt.x + lastIt.w <= 183.51, `开启参考栏压测行宽严禁溢出 183.5mm：${lastIt.x + lastIt.w}`);
+    });
+
+    // (7) 混合矢量 PDF 开启参考栏校验：/RefLbl Do、0.8 G 外框、0.133 g 矢量笔画、xref 偏移与流解压还原
+    assert.strictEqual(typeof w.renderRefLabelStrip, 'function', '应提供 renderRefLabelStrip 贴图函数');
+    const refPdfPlan = w.buildPagePlan([...'琅树桥欢'], 6)[0];
+    const refPdfLay = w.layoutDictPage(refPdfPlan.dictItems, refPdfPlan.refChars);
+    assert.strictEqual(refPdfLay.hasRef, true, 'PDF 布局启用参考栏时 hasRef 应为 true');
+    const refBackRaw = w.buildDictPageStream(
+      refPdfLay,
+      strokeCache,
+      refPdfLay.rows.map((_, i) => 'P' + i),
+      'TopBack',
+      { 玕: 'F0' },
+      'RefLbl'
+    );
+    assert.ok(!/NaN|undefined|Infinity/.test(refBackRaw), '含参考栏的默写 PDF 矢量流不应出现非法数值');
+    assert.ok(
+      refBackRaw.includes('/TopBack Do') && refBackRaw.includes('/RefLbl Do') &&
+      refBackRaw.includes('0.8 G ') && refBackRaw.includes('0.133 g') &&
+      refBackRaw.includes(' re S') && refBackRaw.includes(' f\n'),
+      '含参考栏的默写 PDF 流应包含 /RefLbl Do、0.8 G 框线、0.133 g 纯矢量笔画与田字格指令'
+    );
+    const refBackComp = await w.deflateBytes(enc.encode(refBackRaw));
+    const refBackImgs = Object.fromEntries(refPdfLay.rows.map((_, i) => ['P' + i, topImg]));
+    refBackImgs.F0 = topImg;
+    const refPdfBlob = w.makePdf(
+      [
+        { stream: compS1, images: makeImgs(layP1.blocks.length) },
+        { stream: refBackComp, images: refBackImgs },
+      ],
+      { Top: topImg, TopBack: topImg, RefLbl: topImg }
+    );
+    const rPdfBuf = Buffer.concat(refPdfBlob.p.map((x) => (typeof x === 'string' ? Buffer.from(x) : Buffer.from(x))));
+    const rPdfLat = rPdfBuf.toString('latin1');
+    assert.ok(rPdfLat.includes('/RefLbl '), '启用参考栏的双面 PDF 应注册共享 /RefLbl 图片资源');
+    const rSx = rPdfLat.match(/startxref\n(\d+)\n%%EOF/);
+    assert.ok(rSx && rPdfLat.slice(Number(rSx[1])).startsWith('xref\n0 '), '含参考栏 PDF startxref 应有效');
+    const rXrefLines = rPdfLat.slice(Number(rSx[1])).split('\n').filter((l) => /^\d{10} \d{5} [nf] ?$/.test(l));
+    for (let objNum = 1; objNum < rXrefLines.length; objNum++) {
+      const off = Number(rXrefLines[objNum].slice(0, 10));
+      assert.ok(rPdfLat.slice(off, off + 20).startsWith(`${objNum} 0 obj\n`), `含参考栏 PDF xref 对象 ${objNum} 偏移无效`);
+    }
+    const rStreamRe = /<<([^>]+)>>\nstream\n/g;
+    const rDecoded = [];
+    let rm;
+    while ((rm = rStreamRe.exec(rPdfLat))) {
+      const lenM = rm[1].match(/\/Length (\d+)/);
+      const sLen = Number(lenM[1]);
+      const start = rm.index + rm[0].length;
+      const inf = zlib.inflateSync(rPdfBuf.subarray(start, start + sLen));
+      if (!rm[1].includes('/Subtype/Image')) rDecoded.push(inf.toString('utf8'));
+      rStreamRe.lastIndex = start + sLen;
+    }
+    assert.deepStrictEqual(rDecoded, [rawS1, refBackRaw], '含参考栏双面 PDF 正反两页矢量流解压后应与原始内容完全一致');
+
+    // 恢复默认状态：参考汉字勾选、笔顺模式与默认生字
+    setShowRef(true);
+    setInp('树桥数欢园种活极洗点');
+    setMode('stroke');
+    assert.strictEqual(errors.length, 0, '双面/默写模式及参考汉字栏测试过程不应产生任何脚本错误：' + errors.join(' | '));
+
+    console.log(`冒烟测试通过：全字库 ${allChars.length} 字（${totalStrokesChecked} 条笔画矢量转换全通过；组词覆盖 ${withWords}/${allChars.length}，${(totalCoverage * 100).toFixed(1)}%；一级字 ${(l1Coverage * 100).toFixed(1)}%），混合矢量 PDF（首页流 ${(rawS1.length / 1024).toFixed(1)} KB → ${(compS1.length / 1024).toFixed(1)} KB）、双面正反 1:1 默写（乱序防连撞、乱序参考汉字栏与显隐开关、61 词单页防破页、超纲楷体兜底、搭档字切音）、仅默写反选去字合页、自动日期、排版折行、空白巩固区、单音字改音、防空勾、局部保焦点、一键打印与 Markdown 均正常`);
     process.exit(0);
   } catch (e) {
     console.error('冒烟测试失败：' + e.message);
