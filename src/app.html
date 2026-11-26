@@ -78,6 +78,10 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 .wpy{font-family:Arial,"PingFang SC",sans-serif;font-size:var(--pypt);line-height:1.1;color:#222;white-space:nowrap;padding:0 2px;border-radius:3px}
 .wpy.poly-py{cursor:pointer;text-decoration:underline dotted rgba(192,57,43,.55);text-underline-offset:2px}
 .wpy.poly-py:hover{background:rgba(192,57,43,.1);color:#c0392b}
+.ref-bar{height:9mm;margin-bottom:2.5mm;box-sizing:border-box;border:.25mm solid #ccc;background:#fff;display:flex;align-items:center;padding:0 3mm}
+.ref-lbl{font-size:10pt;line-height:1.2;color:#666;white-space:nowrap;flex:none;width:19mm}
+.ref-list{display:flex;align-items:center;gap:5.5mm;flex:1;min-width:0}
+.ref-ch{flex:none;width:6.8mm;height:6.8mm}
 svg{display:block}
 @media (pointer:coarse){select,input[type=text],input[type=date],.padd-py input,.wadd,.py-inp{font-size:16px}}
 @page{size:A4;margin:0}
@@ -89,6 +93,7 @@ svg{display:block}
 <div class="opts">
 <label>模式 <select id="mode"><option value="stroke" selected>笔顺</option><option value="duplex">双面（笔顺+默写）</option><option value="dictation">仅默写</option></select></label>
 <button type="button" id="bshuf" class="mini" style="display:none" onclick="reshuffleDict()">乱序</button>
+<label id="refWrap" class="dt-auto" style="display:none"><input type="checkbox" id="showRef" checked> 参考汉字</label>
 <label>每页字数 <select id="per"><option>4</option><option>5</option><option selected>6</option></select></label>
 <label id="ghostWrap">描红格 <select id="ghost"><option>0</option><option>2</option><option selected>3</option><option>4</option></select></label>
 <span class="dt-grp"><label class="dt-auto"><input type="checkbox" id="dtAuto" checked> 自动日期</label><input type="date" id="dt"></span>
@@ -97,7 +102,7 @@ svg{display:block}
 <div id="poly"></div>
 <div id="singles"></div>
 <div id="msg">字库加载中…如果一直没变化，说明当前打开方式不能运行网页，请改用 Safari 或 Chrome 打开页面链接（不要用文件预览或微信内置浏览器）。</div>
-<div class="tip">收录常用字约 7000 个，支持笔顺、双面（正面笔顺+反面默写）与仅默写模式。多音字可勾选读音、所有汉字可增删组词并实时同步反面默写，预览点击多音搭档字可切音（自动保存在本机）。打印或导出 PDF 请选 A4 纸、缩放选“实际大小”，双面打印选长边翻转。</div>
+<div class="tip">收录常用字约 7000 个，支持笔顺、双面（正面笔顺+反面默写）与仅默写模式，默写页顶部提供乱序参考汉字（可勾选显隐）。多音字可勾选读音、所有汉字可增删组词并实时同步反面默写，预览点击多音搭档字可切音（自动保存在本机）。打印或导出 PDF 请选 A4 纸、缩放选“实际大小”，双面打印选长边翻转。</div>
 </div>
 <div class="wrap"><div id="root"></div></div>
 <script>
@@ -111,21 +116,25 @@ let inpTimer=null;
 const CFG_KEY='hz_poly_v1';
 const MODE_KEY='hz_mode_v1';
 const PARTNER_PY_KEY='hz_partner_py_v1';
+const REF_KEY='hz_ref_v1';
 const MODE_META={
   stroke:{title:'汉字笔顺练习',filePrefix:'汉字练习'},
   duplex:{title:'汉字笔顺练习',backTitle:'生字默写练习',filePrefix:'汉字双面练习'},
   dictation:{title:'生字默写练习',backTitle:'生字默写练习',filePrefix:'生字默写练习'}
 };
+const INIT_SHUFFLE_SEED=0x243f6a88;
 let partnerPy={};
-let shuffleSeed=0x243f6a88;
+let shuffleSeed=INIT_SHUFFLE_SEED;
 function curMode(){
   const el=$('mode');
   const v=el?el.value:'stroke';
   return MODE_META[v]?v:'stroke';
 }
+function isShowRef(){const el=$('showRef');return !el||el.checked;}
 function syncModeUi(){
   const m=curMode();
   $('bshuf').style.display=m==='stroke'?'none':'';
+  $('refWrap').style.display=m==='stroke'?'none':'';
   $('ghostWrap').style.display=m==='dictation'?'none':'';
 }
 function syncDateUi(){
@@ -135,6 +144,10 @@ function loadUiState(){
   try{
     const m=localStorage.getItem(MODE_KEY);
     if(m&&MODE_META[m])$('mode').value=m;
+  }catch(e){}
+  try{
+    const r=localStorage.getItem(REF_KEY);
+    if($('showRef'))$('showRef').checked=r!=='0';
   }catch(e){}
   try{
     const raw=localStorage.getItem(PARTNER_PY_KEY);
@@ -496,14 +509,69 @@ function shuffleDictItems(items,pageIdx){
   }
   return arr;
 }
+function shuffleRefChars(pageChars,pIdx,dictItems){
+  const n=pageChars.length;
+  if(n<=1)return pageChars.slice();
+  let h=(shuffleSeed^0x9e3779b9^Math.imul(pIdx+1,0x85ebca6b))>>>0;
+  for(let i=0;i<n;i++){
+    h^=pageChars[i].charCodeAt(0);
+    h=Math.imul(h,0x27d4eb2d)>>>0;
+  }
+  const rng=makeRng(h);
+  const arr=pageChars.slice();
+  for(let i=n-1;i>0;i--){
+    const j=Math.floor(rng()*(i+1));
+    const tmp=arr[i];arr[i]=arr[j];arr[j]=tmp;
+  }
+  const sameSeq=(a,b)=>a.length===b.length&&a.every((x,i)=>x===b[i]);
+  if(n===2){
+    if(shuffleSeed===INIT_SHUFFLE_SEED&&arr[0]===pageChars[0])return [arr[1],arr[0]];
+    return arr;
+  }
+  const firstTargets=[],seen=new Set();
+  if(Array.isArray(dictItems)){
+    for(let i=0;i<dictItems.length;i++){
+      const t=dictItems[i]&&dictItems[i].target;
+      if(t&&!seen.has(t)){seen.add(t);firstTargets.push(t);}
+    }
+  }
+  const isBad=cand=>sameSeq(cand,pageChars)||(firstTargets.length===n&&sameSeq(cand,firstTargets));
+  if(!isBad(arr))return arr;
+  const pairs=[];
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
+      if(arr[i]!==arr[j])pairs.push([i,j]);
+    }
+  }
+  if(pairs.length){
+    const off=Math.floor(rng()*pairs.length);
+    for(let t=0;t<pairs.length;t++){
+      const [i,j]=pairs[(off+t)%pairs.length];
+      const cand=arr.slice();
+      cand[i]=arr[j];cand[j]=arr[i];
+      if(!isBad(cand))return cand;
+    }
+  }
+  return arr;
+}
 function dictOrderSig(ok,per){
   return buildPagePlan(ok,per).map(pl=>pl.dictItems.map(x=>x.target+':'+x.word).join(',')).join('|');
 }
+function refOrderSig(ok,per){
+  return buildPagePlan(ok,per).map(pl=>pl.refChars.join('')).join('|');
+}
 function reshuffleDict(){
   const {ok,per}=cur();
-  const prevSig=ok.length?dictOrderSig(ok,per):'';
-  let next=shuffleSeed;
-  for(let tries=0;tries<12;tries++){
+  const prevPlans=ok.length?buildPagePlan(ok,per):[];
+  const prevDictSig=prevPlans.map(pl=>pl.dictItems.map(x=>x.target+':'+x.word).join(',')).join('|');
+  const prevRefSig=prevPlans.map(pl=>pl.refChars.join('')).join('|');
+  const canChangeDict=prevPlans.some(pl=>pl.dictItems.length>=2);
+  const canChangeRef=prevPlans.some(pl=>pl.pageChars.length>=2);
+  const prevPageDictSigs=prevPlans.map(pl=>pl.dictItems.map(x=>x.target+':'+x.word).join(','));
+  const prevPageRefSigs=prevPlans.map(pl=>pl.refChars.join(''));
+  const origSeed=shuffleSeed;
+  let bestGlobal=null,bestAll=null,next=origSeed;
+  for(let tries=0;tries<40;tries++){
     let cand;
     if(typeof crypto!=='undefined'&&crypto.getRandomValues){
       const a=new Uint32Array(1);
@@ -512,13 +580,27 @@ function reshuffleDict(){
     }else{
       cand=(Math.floor(Math.random()*0x100000000)>>>0);
     }
-    if(cand===shuffleSeed)continue;
+    if(cand===origSeed)continue;
     shuffleSeed=cand;
-    next=cand;
-    if(!prevSig||dictOrderSig(ok,per)!==prevSig)break;
+    if(!ok.length){bestAll=cand;break;}
+    const plans=buildPagePlan(ok,per);
+    const dSig=plans.map(pl=>pl.dictItems.map(x=>x.target+':'+x.word).join(',')).join('|');
+    const rSig=plans.map(pl=>pl.refChars.join('')).join('|');
+    const okGlobal=(!canChangeDict||dSig!==prevDictSig)&&(!canChangeRef||rSig!==prevRefSig);
+    if(okGlobal&&bestGlobal===null)bestGlobal=cand;
+    if(okGlobal){
+      const okAll=plans.every((pl,i)=>{
+        const ds=pl.dictItems.map(x=>x.target+':'+x.word).join(',');
+        const rs=pl.refChars.join('');
+        return (pl.dictItems.length<2||ds!==prevPageDictSigs[i])&&(pl.pageChars.length<2||rs!==prevPageRefSigs[i]);
+      });
+      if(okAll){bestAll=cand;break;}
+    }
+    if(next===origSeed)next=cand;
   }
+  shuffleSeed=bestAll!==null?bestAll:(bestGlobal!==null?bestGlobal:next);
   render();
-  return next;
+  return shuffleSeed;
 }
 function buildWordRow(c,p,showChar){
   const dictSingle=showChar&&isDictOnly();
@@ -719,7 +801,24 @@ function fitHeads(){
   });
 }
 const PAGE={W:210,H:297,PAD_X:13.25,PAD_Y:10,TOP_H:8,CONTENT_W:183.5,BODY_H:269,CELL:17,BORDER:0.35,COLS:11,WRAP_MIN:15,BLANK_TOP_GAP:15,BLANK_TOP_MIN:11,BLANK_ROW_GAP:13,BLANK_ROW_MIN:10,MAX_BLANK_ROWS:5};
-const DICT_BASE={CELL:17,PY_H:6.2,PY_PT:11.5,WORD_GAP:7.0,ROW_GAP:6.5,MIN_ROW_GAP:2.0,MIN_WORD_GAP:4.5};
+const DICT_BASE={CELL:17,PY_H:6.2,PY_PT:11.5,WORD_GAP:7.0,ROW_GAP:6.5,MIN_ROW_GAP:2.0,MIN_WORD_GAP:4.5,REF_H:9.0,REF_GAP:2.5,REF_GLYPH:6.8,REF_ITEM_GAP:5.5,REF_PAD_X:3.0,REF_LBL_W:19.0};
+function refBarMetrics(n){
+  const padX=DICT_BASE.REF_PAD_X,lblW=DICT_BASE.REF_LBL_W;
+  const availW=PAGE.CONTENT_W-2*padX-lblW-0.5;
+  let glyphMm=DICT_BASE.REF_GLYPH,gapMm=DICT_BASE.REF_ITEM_GAP;
+  if(n>0&&n*glyphMm+(n-1)*gapMm>availW){
+    gapMm=n>1?Math.max(1.0,Math.floor(((availW-n*glyphMm)/(n-1))*10)/10):0;
+    if(n*glyphMm+(n-1)*gapMm>availW){
+      gapMm=n>1?1.5:0;
+      glyphMm=Math.max(2.5,Math.floor(((availW-(n-1)*gapMm)/n)*10)/10);
+      if(n*glyphMm+(n-1)*gapMm>availW){
+        gapMm=n>1?0.5:0;
+        glyphMm=Math.max(1.5,Math.floor(((availW-(n-1)*gapMm)/n)*10)/10);
+      }
+    }
+  }
+  return {padX,lblW,glyphMm,gapMm};
+}
 function wordW(len,cellMm){return len*cellMm-Math.max(0,len-1)*PAGE.BORDER;}
 function packDictChunks(prepared,cellMm,wordGap){
   const pitch=cellMm-PAGE.BORDER;
@@ -746,9 +845,14 @@ function packDictChunks(prepared,cellMm,wordGap){
   if(cur.length)rows.push(cur);
   return rows;
 }
-function layoutDictPage(items){
+function layoutDictPage(items,refChars){
+  const hasRef=Array.isArray(refChars)&&refChars.length>0;
+  const refH=hasRef?DICT_BASE.REF_H:0;
+  const refGap=hasRef?DICT_BASE.REF_GAP:0;
+  const refList=hasRef?refChars.slice():[];
+  const availH=PAGE.BODY_H-refH-refGap;
   if(!items||!items.length){
-    return {cellMm:DICT_BASE.CELL,pyH:DICT_BASE.PY_H,pyPt:DICT_BASE.PY_PT,wordGap:DICT_BASE.WORD_GAP,rowGap:DICT_BASE.ROW_GAP,rows:[],items:[]};
+    return {cellMm:DICT_BASE.CELL,pyH:DICT_BASE.PY_H,pyPt:DICT_BASE.PY_PT,wordGap:DICT_BASE.WORD_GAP,rowGap:DICT_BASE.ROW_GAP,hasRef,refChars:refList,refH,refGap,rows:[],items:[]};
   }
   const prepared=items.map(it=>({
     ...it,
@@ -766,13 +870,13 @@ function layoutDictPage(items){
     const rowH=pyH+cellMm;
     if(n===0)return null;
     if(n===1){
-      if(rowH<=PAGE.BODY_H+1e-6)return {cellMm,pyH,pyPt,wordGap,rowGap:0,packed};
+      if(rowH<=availH+1e-6)return {cellMm,pyH,pyPt,wordGap,rowGap:0,packed};
       return null;
     }
-    const slack=(PAGE.BODY_H-n*rowH)/(n-1);
+    const slack=(availH-n*rowH)/(n-1);
     if(slack>=minRowGap-1e-6){
       const rowGap=Math.max(minRowGap,Math.min(maxRowGap,Math.floor(slack*10)/10));
-      if(n*rowH+(n-1)*rowGap<=PAGE.BODY_H+1e-6){
+      if(n*rowH+(n-1)*rowGap<=availH+1e-6){
         return {cellMm,pyH,pyPt,wordGap,rowGap,packed};
       }
     }
@@ -805,10 +909,10 @@ function layoutDictPage(items){
     const packed=packDictChunks(prepared,4.0,1.5);
     const n=packed.length;
     const pyH=2.4,cellMm=4.0,rowH=pyH+cellMm;
-    const rg=n>1?Math.max(0,Math.min(1.5,Math.floor(((PAGE.BODY_H-n*rowH)/(n-1))*10)/10)):0;
+    const rg=n>1?Math.max(0,Math.min(1.5,Math.floor(((availH-n*rowH)/(n-1))*10)/10)):0;
     best={cellMm,pyH,pyPt:5.0,wordGap:1.5,rowGap:rg,packed};
   }
-  let y=PAGE.PAD_Y+PAGE.TOP_H;
+  let y=PAGE.PAD_Y+PAGE.TOP_H+refH+refGap;
   const rowH=best.pyH+best.cellMm;
   const rows=best.packed.map((rowItems,rIdx)=>{
     const gapAfter=rIdx<best.packed.length-1?best.rowGap:0;
@@ -816,7 +920,7 @@ function layoutDictPage(items){
     y+=rowH+gapAfter;
     return row;
   });
-  return {cellMm:best.cellMm,pyH:best.pyH,pyPt:best.pyPt,wordGap:best.wordGap,rowGap:best.rowGap,rows,items};
+  return {cellMm:best.cellMm,pyH:best.pyH,pyPt:best.pyPt,wordGap:best.wordGap,rowGap:best.rowGap,hasRef,refChars:refList,refH,refGap,rows,items};
 }
 function buildPagePlan(ok,per,mode){
   const m=mode||curMode();
@@ -825,7 +929,8 @@ function buildPagePlan(ok,per,mode){
   for(let i=0,pIdx=0;i<list.length;i+=per,pIdx++){
     const pageChars=list.slice(i,i+per);
     const dictItems=shuffleDictItems(collectDictItems(pageChars),pIdx);
-    plans.push({pIdx,pageChars,dictItems});
+    const refChars=shuffleRefChars(pageChars,pIdx,dictItems);
+    plans.push({pIdx,pageChars,refChars,dictItems});
   }
   return plans;
 }
@@ -958,10 +1063,22 @@ function renderFrontSheetHtml(pageItems,per,gh,pIdx,topRight,emptyRowHtml){
   out+='</div>';
   return out;
 }
-function renderBackSheetHtml(dictItems,pIdx,topRight){
-  const lay=layoutDictPage(dictItems);
+function renderRefBarHtml(refChars){
+  const m=refBarMetrics(refChars.length);
+  const listStyle=m.gapMm!==DICT_BASE.REF_ITEM_GAP?(' style="gap:'+m.gapMm.toFixed(2)+'mm"'):'';
+  const chStyle=m.glyphMm!==DICT_BASE.REF_GLYPH?(' style="width:'+m.glyphMm.toFixed(2)+'mm;height:'+m.glyphMm.toFixed(2)+'mm"'):'';
+  const items=refChars.map(c=>{
+    let g='';
+    if(DB&&DB[c])DB[c].s.forEach(p=>{g+='<path d="'+p+'" fill="#222"/>';});
+    return '<div class="ref-ch" data-char="'+esc(c)+'"'+chStyle+'><svg viewBox="0 0 1024 1024" width="100%" height="100%"><g transform="translate(0,900) scale(1,-1)">'+g+'</g></svg></div>';
+  }).join('');
+  return '<div class="ref-bar"><span class="ref-lbl">参考生字：</span><div class="ref-list"'+listStyle+'>'+items+'</div></div>';
+}
+function renderBackSheetHtml(dictItems,pIdx,topRight,refChars){
+  const lay=layoutDictPage(dictItems,refChars);
   const st='--cm:'+lay.cellMm.toFixed(2)+'mm;--pyh:'+lay.pyH.toFixed(2)+'mm;--pypt:'+lay.pyPt.toFixed(2)+'pt';
   let out='<div class="sheet" data-sheet="back" data-page="'+pIdx+'" style="'+st+'"><div class="top"><span>生字默写练习</span>'+topRight+'</div>';
+  if(lay.hasRef)out+=renderRefBarHtml(lay.refChars);
   lay.rows.forEach((r,rIdx)=>{
     const rmb=r.gapAfter?('margin-bottom:'+r.gapAfter.toFixed(2)+'mm'):'';
     out+='<div class="drow" style="'+rmb+'" data-row="'+rIdx+'">';
@@ -991,13 +1108,14 @@ function render(){
   const topRight=topRightHtml(dtInfo);
   let emptyRowHtml='';for(let k=0;k<PAGE.COLS;k++)emptyRowHtml+=cell([],0,'none',PAGE.CELL);
   const plans=buildPagePlan(ok,per);
+  const showRef=isShowRef();
   let out='';
   plans.forEach(pl=>{
     if(mode==='stroke'||mode==='duplex'){
       out+=renderFrontSheetHtml(pl.pageChars,per,gh,pl.pIdx,topRight,emptyRowHtml);
     }
     if(mode==='duplex'||mode==='dictation'){
-      out+=renderBackSheetHtml(pl.dictItems,pl.pIdx,topRight);
+      out+=renderBackSheetHtml(pl.dictItems,pl.pIdx,topRight,showRef?pl.refChars:[]);
     }
   });
   const emptyTip=(mode==='dictation'&&ok.length&&!plans.length)?'已反选全部读音，请勾选需要默写的字音':'输入生字后这里会出现预览';
@@ -1153,9 +1271,33 @@ function buildPageStream(lay,gh,strokeCache,headNames,topName){
   });
   return ops.join('\n');
 }
-function buildDictPageStream(pageLay,strokeCache,pyNames,topName,fallbackMap){
+function buildDictPageStream(pageLay,strokeCache,pyNames,topName,fallbackMap,refLblName){
   const ops=[];
   if(topName)ops.push(pdfPlaceImg(topName,PAGE.PAD_X,PAGE.PAD_Y,PAGE.CONTENT_W,PAGE.TOP_H));
+  const getSp=c=>{
+    let sp=strokeCache.get(c);
+    if(!sp){sp=DB[c].s.map(svgPathToPdf);strokeCache.set(c,sp);}
+    return sp;
+  };
+  if(pageLay.hasRef){
+    const refX=PAGE.PAD_X,refY=PAGE.PAD_Y+PAGE.TOP_H;
+    const m=refBarMetrics(pageLay.refChars.length);
+    if(refLblName)ops.push(pdfPlaceImg(refLblName,refX+m.padX,refY+(pageLay.refH-6.0)/2,m.lblW,6.0));
+    const refBw=0.25;
+    ops.push('q 0.8 G '+pNum(refBw*PDF_PT)+' w [] 0 d '+pNum((refX+refBw/2)*PDF_PT)+' '+pNum((PAGE.H-(refY+pageLay.refH-refBw/2))*PDF_PT)+' '+pNum((PAGE.CONTENT_W-refBw)*PDF_PT)+' '+pNum((pageLay.refH-refBw)*PDF_PT)+' re S Q');
+    const gxMm=refX+m.padX+m.lblW;
+    const glyphYMm=refY+(pageLay.refH-m.glyphMm)/2;
+    const iy=(PAGE.H-(glyphYMm+m.glyphMm))*PDF_PT;
+    const s=(m.glyphMm*PDF_PT)/1024;
+    pageLay.refChars.forEach((c,ci)=>{
+      if(!DB||!DB[c])return;
+      const ix=(gxMm+ci*(m.glyphMm+m.gapMm))*PDF_PT;
+      const sp=getSp(c);
+      ops.push('q '+pScale(s)+' 0 0 '+pScale(s)+' '+pNum(ix)+' '+pNum(iy+124*s)+' cm 0.133 g');
+      for(let i=0;i<sp.length;i++)if(sp[i])ops.push(sp[i]+' f');
+      ops.push('Q');
+    });
+  }
   pageLay.rows.forEach((r,idx)=>{
     const pn=pyNames&&pyNames[idx];
     if(pn)ops.push(pdfPlaceImg(pn,PAGE.PAD_X,r.y-HEAD_PAD_TOP,PAGE.CONTENT_W,pageLay.pyH+HEAD_PAD_TOP));
@@ -1174,11 +1316,6 @@ function buildDictPageStream(pageLay,strokeCache,pyNames,topName,fallbackMap){
     });
   }
   ops.push('0.267 G '+pNum(PAGE.BORDER*PDF_PT)+' w [] 0 d');
-  const getSp=c=>{
-    let sp=strokeCache.get(c);
-    if(!sp){sp=DB[c].s.map(svgPathToPdf);strokeCache.set(c,sp);}
-    return sp;
-  };
   pageLay.rows.forEach(r=>{
     r.items.forEach(it=>{
       it.chars.forEach((cObj,ci)=>{
@@ -1251,6 +1388,17 @@ async function renderTopStrip(cv,dt,title){
     }
     x+=sw;
   });
+  return canvasToFlateImage(cv,true);
+}
+async function renderRefLabelStrip(cv){
+  const w=Math.max(1,Math.round(DICT_BASE.REF_LBL_W*STRIP_MM));
+  const h=Math.max(1,Math.round(6.0*STRIP_MM));
+  cv.width=w;cv.height=h;
+  const ctx=cv.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='#666';ctx.font=stripPt(10)+'px '+KT_FONT;
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('参考生字：',0,h*0.52);
   return canvasToFlateImage(cv,true);
 }
 async function renderHeadStrip(cv,c,n,headH){
@@ -1401,9 +1549,13 @@ async function exportPdf(){
   const cv=document.createElement('canvas');
   try{
     const dt=selectedDateInfo();
+    const showRef=isShowRef();
     const sharedImages={};
     if(mode==='stroke'||mode==='duplex')sharedImages.Top=await renderTopStrip(cv,dt,'汉字笔顺练习');
-    if(mode==='duplex'||mode==='dictation')sharedImages.TopBack=await renderTopStrip(cv,dt,'生字默写练习');
+    if(mode==='duplex'||mode==='dictation'){
+      sharedImages.TopBack=await renderTopStrip(cv,dt,'生字默写练习');
+      if(showRef)sharedImages.RefLbl=await renderRefLabelStrip(cv);
+    }
     const enc=new TextEncoder();
     const strokeCache=new Map();
     const pages=[];
@@ -1431,7 +1583,7 @@ async function exportPdf(){
       if(mode==='duplex'||mode==='dictation'){
         donePages++;
         if(totalPdfPages>1)$('msg').textContent='正在生成 PDF（'+donePages+'/'+totalPdfPages+'）…';
-        const dLay=layoutDictPage(pl.dictItems);
+        const dLay=layoutDictPage(pl.dictItems,showRef?pl.refChars:[]);
         const images={},pyNames=[],fallbackMap={};
         let fbIdx=0;
         for(let rIdx=0;rIdx<dLay.rows.length;rIdx++){
@@ -1449,7 +1601,7 @@ async function exportPdf(){
             }
           }
         }
-        const rawStream=buildDictPageStream(dLay,strokeCache,pyNames,'TopBack',fallbackMap);
+        const rawStream=buildDictPageStream(dLay,strokeCache,pyNames,'TopBack',fallbackMap,showRef?'RefLbl':null);
         const stream=await deflateBytes(enc.encode(rawStream));
         pages.push({stream,images});
         await new Promise(r=>setTimeout(r,0));
@@ -1467,9 +1619,13 @@ function formatDictItemMd(it){
   return pys+'：'+cloze;
 }
 function buildDictPagesMd(plans){
+  const showRef=isShowRef();
   let out='';
   plans.forEach((pl,idx)=>{
     if(plans.length>1)out+='### 第 '+(idx+1)+' 页\n\n';
+    if(showRef&&pl.refChars&&pl.refChars.length){
+      out+='参考生字：'+pl.refChars.join('　')+'\n\n';
+    }
     pl.dictItems.forEach((it,j)=>{
       out+=(j+1)+'. '+formatDictItemMd(it)+'\n';
     });
@@ -1543,6 +1699,10 @@ $('mode').onchange=()=>{
   render();
 };
 $('per').onchange=render;$('ghost').onchange=render;
+$('showRef').onchange=()=>{
+  try{localStorage.setItem(REF_KEY,$('showRef').checked?'1':'0');}catch(e){}
+  render();
+};
 $('dt').onchange=()=>{
   if(!$('dt').value){$('dtAuto').checked=false;syncDateUi();}
   render();
