@@ -78,10 +78,10 @@ button.mini.ghost{background:transparent;color:var(--muted);border:1px solid var
 .wpy{font-family:Arial,"PingFang SC",sans-serif;font-size:var(--pypt);line-height:1.1;color:#222;white-space:nowrap;padding:0 2px;border-radius:3px}
 .wpy.poly-py{cursor:pointer;text-decoration:underline dotted rgba(192,57,43,.55);text-underline-offset:2px}
 .wpy.poly-py:hover{background:rgba(192,57,43,.1);color:#c0392b}
-.ref-bar{height:9mm;margin-bottom:2.5mm;box-sizing:border-box;border:.25mm solid #ccc;background:#fff;display:flex;align-items:center;padding:0 3mm}
-.ref-lbl{font-size:10pt;line-height:1.2;color:#666;white-space:nowrap;flex:none;width:19mm}
-.ref-list{display:flex;align-items:center;gap:5.5mm;flex:1;min-width:0}
-.ref-ch{flex:none;width:6.8mm;height:6.8mm}
+.ref-bar{height:19mm;margin-bottom:3mm;box-sizing:border-box;border:.25mm solid #ccc;background:#fff;display:flex;align-items:center;padding:0 3mm}
+.ref-lbl{font-size:11pt;line-height:1.2;color:#666;white-space:nowrap;flex:none;width:21mm}
+.ref-list{display:flex;align-items:center;gap:8mm;flex:1;min-width:0}
+.ref-ch{flex:none;width:16.3mm;height:16.3mm}
 svg{display:block}
 @media (pointer:coarse){select,input[type=text],input[type=date],.padd-py input,.wadd,.py-inp{font-size:16px}}
 @page{size:A4;margin:0}
@@ -801,7 +801,7 @@ function fitHeads(){
   });
 }
 const PAGE={W:210,H:297,PAD_X:13.25,PAD_Y:10,TOP_H:8,CONTENT_W:183.5,BODY_H:269,CELL:17,BORDER:0.35,COLS:11,WRAP_MIN:15,BLANK_TOP_GAP:15,BLANK_TOP_MIN:11,BLANK_ROW_GAP:13,BLANK_ROW_MIN:10,MAX_BLANK_ROWS:5};
-const DICT_BASE={CELL:17,PY_H:6.2,PY_PT:11.5,WORD_GAP:7.0,ROW_GAP:6.5,MIN_ROW_GAP:2.0,MIN_WORD_GAP:4.5,REF_H:9.0,REF_GAP:2.5,REF_GLYPH:6.8,REF_ITEM_GAP:5.5,REF_PAD_X:3.0,REF_LBL_W:19.0};
+const DICT_BASE={CELL:17,PY_H:6.2,PY_PT:11.5,WORD_GAP:7.0,ROW_GAP:6.5,MIN_ROW_GAP:2.0,MIN_WORD_GAP:4.5,REF_H:19.0,REF_GAP:3.0,REF_GLYPH:16.3,REF_ITEM_GAP:8.0,REF_PAD_X:3.0,REF_LBL_W:21.0};
 function refBarMetrics(n){
   const padX=DICT_BASE.REF_PAD_X,lblW=DICT_BASE.REF_LBL_W;
   const availW=PAGE.CONTENT_W-2*padX-lblW-0.5;
@@ -1282,7 +1282,7 @@ function buildDictPageStream(pageLay,strokeCache,pyNames,topName,fallbackMap,ref
   if(pageLay.hasRef){
     const refX=PAGE.PAD_X,refY=PAGE.PAD_Y+PAGE.TOP_H;
     const m=refBarMetrics(pageLay.refChars.length);
-    if(refLblName)ops.push(pdfPlaceImg(refLblName,refX+m.padX,refY+(pageLay.refH-6.0)/2,m.lblW,6.0));
+    if(refLblName)ops.push(pdfPlaceImg(refLblName,refX+m.padX,refY+(pageLay.refH-6.5)/2,m.lblW,6.5));
     const refBw=0.25;
     ops.push('q 0.8 G '+pNum(refBw*PDF_PT)+' w [] 0 d '+pNum((refX+refBw/2)*PDF_PT)+' '+pNum((PAGE.H-(refY+pageLay.refH-refBw/2))*PDF_PT)+' '+pNum((PAGE.CONTENT_W-refBw)*PDF_PT)+' '+pNum((pageLay.refH-refBw)*PDF_PT)+' re S Q');
     const gxMm=refX+m.padX+m.lblW;
@@ -1392,11 +1392,11 @@ async function renderTopStrip(cv,dt,title){
 }
 async function renderRefLabelStrip(cv){
   const w=Math.max(1,Math.round(DICT_BASE.REF_LBL_W*STRIP_MM));
-  const h=Math.max(1,Math.round(6.0*STRIP_MM));
+  const h=Math.max(1,Math.round(6.5*STRIP_MM));
   cv.width=w;cv.height=h;
   const ctx=cv.getContext('2d',{willReadFrequently:true});
   ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
-  ctx.fillStyle='#666';ctx.font=stripPt(10)+'px '+KT_FONT;
+  ctx.fillStyle='#666';ctx.font=stripPt(11)+'px '+KT_FONT;
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText('参考生字：',0,h*0.52);
   return canvasToFlateImage(cv,true);

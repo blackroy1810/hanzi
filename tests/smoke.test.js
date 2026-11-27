@@ -892,10 +892,35 @@ async function runTests(w, d) {
     assert.strictEqual(d.querySelectorAll('.sheet[data-sheet="back"] .ref-bar').length, 2, '重新勾选参考汉字后应恢复渲染 .ref-bar');
     assert.ok(w.buildMd().includes('参考生字：'), '重新勾选参考汉字后 Markdown 应恢复参考生字行');
 
-    // (6) 61 词含超长词极端压测开启参考栏：首行 y=29.5 且底边不溢出 287mm
+    // (6) 参考汉字 1:1 对标默写生字尺寸（16.3mm）、8 行满载不缩格与 61 词极端压测不溢出校验
+    const dictBase = w.eval('DICT_BASE');
+    const pageConst = w.eval('PAGE');
+    const expectedRefGlyph = Math.round((pageConst.CELL - 2 * pageConst.BORDER) * 100) / 100;
+    assert.strictEqual(dictBase.REF_GLYPH, expectedRefGlyph, `参考字默认字形尺寸应 1:1 对标默写田字格内框（${expectedRefGlyph}mm）`);
+    assert.strictEqual(dictBase.REF_H, 19.0, '参考栏高度应同步调整为 19.0mm');
+    assert.strictEqual(dictBase.REF_GAP, 3.0, '参考栏下间距应同步调整为 3.0mm');
+    assert.strictEqual(dictBase.REF_ITEM_GAP, 8.0, '参考字默认间距应同步调整为 8.0mm');
+    assert.strictEqual(dictBase.REF_LBL_W, 21.0, '参考生字标签宽应同步调整为 21.0mm');
+    const m6 = w.refBarMetrics(6);
+    assert.strictEqual(m6.glyphMm, expectedRefGlyph, '每页 6 字时参考字应保持满分 16.3mm 不触发缩小');
+    assert.strictEqual(m6.gapMm, 8.0, '每页 6 字时参考字间距应保持 8.0mm 不触发压缩');
+    assert.ok(m6.padX * 2 + m6.lblW + 6 * m6.glyphMm + 5 * m6.gapMm <= pageConst.CONTENT_W, '6 字参考栏总宽不应超出 183.5mm 内容宽');
+    const m10 = w.refBarMetrics(10);
+    assert.ok(m10.padX * 2 + m10.lblW + 10 * m10.glyphMm + 9 * m10.gapMm <= pageConst.CONTENT_W, '超常规 10 字参考栏经自适应缩放后仍不应超出 183.5mm');
+    assert.ok([...d.querySelectorAll('.sheet[data-sheet="back"]:first-of-type .ref-ch')].every((el) => !el.style.width), '常规 6 字页 DOM .ref-ch 不应触发内联缩字样式');
+
+    const heavy32Items = Array.from({ length: 32 }, (_, idx) => ({
+      target: '树桥欢园活极'[idx % 6],
+      targetPy: ['shù', 'qiáo', 'huān', 'yuán', 'huó', 'jí'][idx % 6],
+      word: ['大树', '大桥', '欢乐', '公园', '生活', '积极'][idx % 6],
+    }));
+    const heavyRefLay = w.layoutDictPage(heavy32Items, [...'树桥欢园活极']);
+    assert.strictEqual(heavyRefLay.cellMm, 17, '开启放大后参考栏时，8 行（32 词）满载页仍应保持完整 17mm 田字格');
+    assert.strictEqual(heavyRefLay.rowGap, 6.5, '开启放大后参考栏时，8 行（32 词）满载页仍应保持 6.5mm 标准行距');
+
     const stressRefLay = w.layoutDictPage(stressItems, [...'树桥欢园活极']);
     assert.strictEqual(stressRefLay.hasRef, true, '传参开启参考栏时 hasRef 应为 true');
-    assert.strictEqual(stressRefLay.rows[0].y, 29.5, '开启参考栏后首行起始纵坐标应为 29.5mm');
+    assert.strictEqual(stressRefLay.rows[0].y, 40, '开启参考栏后首行起始纵坐标应为 40mm（10+8+19+3）');
     const lastStressRefRow = stressRefLay.rows[stressRefLay.rows.length - 1];
     assert.ok(lastStressRefRow.cellY + stressRefLay.cellMm <= 287.01, `开启参考栏后 61 词压测底边严禁溢出 287mm：${lastStressRefRow.cellY + stressRefLay.cellMm}`);
     stressRefLay.rows.forEach((r) => {
@@ -903,7 +928,7 @@ async function runTests(w, d) {
       assert.ok(lastIt.x + lastIt.w <= 183.51, `开启参考栏压测行宽严禁溢出 183.5mm：${lastIt.x + lastIt.w}`);
     });
 
-    // (7) 混合矢量 PDF 开启参考栏校验：/RefLbl Do、0.8 G 外框、0.133 g 矢量笔画、xref 偏移与流解压还原
+    // (7) 混合矢量 PDF 开启参考栏校验：/RefLbl Do、0.8 G 外框、0.133 g 矢量笔画（16.3mm 缩放）、xref 偏移与流解压还原
     assert.strictEqual(typeof w.renderRefLabelStrip, 'function', '应提供 renderRefLabelStrip 贴图函数');
     const refPdfPlan = w.buildPagePlan([...'琅树桥欢'], 6)[0];
     const refPdfLay = w.layoutDictPage(refPdfPlan.dictItems, refPdfPlan.refChars);
@@ -917,11 +942,13 @@ async function runTests(w, d) {
       'RefLbl'
     );
     assert.ok(!/NaN|undefined|Infinity/.test(refBackRaw), '含参考栏的默写 PDF 矢量流不应出现非法数值');
+    const expectedRefPdfScale = w.pScale((expectedRefGlyph * (72 / 25.4)) / 1024);
     assert.ok(
       refBackRaw.includes('/TopBack Do') && refBackRaw.includes('/RefLbl Do') &&
       refBackRaw.includes('0.8 G ') && refBackRaw.includes('0.133 g') &&
+      refBackRaw.includes(`${expectedRefPdfScale} 0 0 ${expectedRefPdfScale} `) &&
       refBackRaw.includes(' re S') && refBackRaw.includes(' f\n'),
-      '含参考栏的默写 PDF 流应包含 /RefLbl Do、0.8 G 框线、0.133 g 纯矢量笔画与田字格指令'
+      '含参考栏的默写 PDF 流应包含 /RefLbl Do、0.8 G 框线、16.3mm 1:1 矢量缩放的 0.133 g 笔画与田字格指令'
     );
     const refBackComp = await w.deflateBytes(enc.encode(refBackRaw));
     const refBackImgs = Object.fromEntries(refPdfLay.rows.map((_, i) => ['P' + i, topImg]));
